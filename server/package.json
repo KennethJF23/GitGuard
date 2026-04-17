@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
   "dependencies": {
     "@babel/parser": "^7.29.2",
     "adm-zip": "^0.5.17",

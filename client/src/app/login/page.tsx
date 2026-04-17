@@ -12,7 +12,7 @@ export default function LoginPage() {
   const [isSocialSubmitting, setIsSocialSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000'
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
   const githubClientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || ''
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
   const redirectUri = useMemo(() => {
@@ -63,6 +63,14 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search)
     const code = params.get('code')
     const state = params.get('state')
+    const emailFromQuery = params.get('email')
+    const passwordFromQuery = params.get('password')
+
+    if (emailFromQuery || passwordFromQuery) {
+      if (emailFromQuery) setEmail(emailFromQuery)
+      if (passwordFromQuery) setPassword(passwordFromQuery)
+      window.history.replaceState({}, document.title, '/login')
+    }
 
     if (code && state === 'github') {
       handleSocialResponse('/api/auth/github', { code, redirectUri })
@@ -78,7 +86,7 @@ export default function LoginPage() {
       window.history.replaceState({}, document.title, '/login')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [redirectUri])
+  }, [redirectUri, router])
 
   const startGithubSignIn = () => {
     if (!githubClientId) {
@@ -128,7 +136,7 @@ export default function LoginPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email: email.trim(),
+          email: email.trim().toLowerCase(),
           password,
         }),
       })
@@ -179,7 +187,7 @@ export default function LoginPage() {
               </Link>
             </p>
 
-            <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+            <form className="mt-8 space-y-5" method="post" action="/login" onSubmit={handleSubmit}>
               <div>
                 <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-800">
                   Email address
