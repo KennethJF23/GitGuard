@@ -319,13 +319,14 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                   <article className={`${resultCardClass} p-6`}>
                     <h3 className={isDark ? 'text-xl font-semibold text-white mb-5' : 'text-xl font-semibold text-gray-900 mb-5'}>Bar Chart: Repository Composition</h3>
                     <div className={isDark ? 'rounded-xl bg-black/20 border border-white/10 p-4' : 'rounded-xl bg-gray-50 border border-gray-100 p-4'}>
-                      <div className="flex items-end gap-3 h-52">
+                      <div className="mx-auto flex h-52 max-w-3xl items-end justify-center gap-3">
                       {normalizedDistributionMetrics.map((item) => (
                         <div key={item.label} className="flex-1 h-full flex flex-col items-center justify-end gap-2">
                           <p className={isDark ? 'text-xs font-semibold text-blue-200' : 'text-xs font-semibold text-gray-700'}>
                             {item.value}%
                           </p>
                           <motion.div
+                            title={`${item.label}: ${item.value}%`}
                             initial={{ height: 0, opacity: 0.6 }}
                             animate={{ height: Math.max((item.value / 100) * 150, 12), opacity: 1 }}
                             transition={{ duration: 0.5 }}
