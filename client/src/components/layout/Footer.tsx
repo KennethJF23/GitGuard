@@ -12,11 +12,11 @@ export function Footer() {
             <div className="flex items-center gap-2 mb-4">
               <Image
                 src="/images/Hero_Image.png"
-                alt="RepoSmart Logo"
+                alt="GitGuard Logo"
                 width={40}
                 height={40}
               />
-              <span className="rs-text-glow font-bold text-xl text-white">RepoSmart</span>
+              <span className="rs-text-glow font-bold text-xl text-white">GitGuard</span>
             </div>
             <p className="text-sm sm:text-base text-[#8b949e] mb-6 max-w-sm leading-relaxed">
               Making GitHub repositories safer and more reliable for everyone.
@@ -170,7 +170,7 @@ export function Footer() {
         {/* Bottom Bar - Enabled flex-wrap for mobile */}
         <div className="pt-8 border-t border-[#30363d] flex flex-col md:flex-row justify-between items-center gap-4 text-xs sm:text-sm">
           <p className="text-center md:text-left">
-            © 2026 RepoSmart. All rights reserved.
+            © 2026 GitGuard. All rights reserved.
           </p>
           <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
             <a
