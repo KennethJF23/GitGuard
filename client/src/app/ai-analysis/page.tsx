@@ -5,6 +5,8 @@ const AiAnalysisPage: React.FC = () => {
   return (
     <AnalysisDashboardPage
       config={{
+        theme: 'dark',
+        hideHeader: true,
         sectionLabel: 'AI Analysis',
         title: 'Repository AI Analysis Dashboard',
         subtitle:
