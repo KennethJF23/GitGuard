@@ -93,7 +93,7 @@ const Header: React.FC = () => {
       ]
     },
     {
-      title: 'Mailinblack',
+      title: 'GitGuard',
       submenu: 'mailinblack',
       items: [
         { title: 'Company', href: '/company' },
@@ -144,7 +144,7 @@ const Header: React.FC = () => {
           <a href="/" className="flex items-center">
             <Image
               src="/logomailinblack2.webp"
-              alt="Mailinblack"
+              alt="GitGuard"
               width={170}
               height={34}
               className="h-8 w-auto"
@@ -153,7 +153,7 @@ const Header: React.FC = () => {
                 target.style.display = 'none';
                 const parent = target.parentElement;
                 if (parent) {
-                  parent.innerHTML = '<div class="text-2xl font-bold text-blue-600">Mailinblack</div>';
+                  parent.innerHTML = '<div class="text-2xl font-bold text-blue-600">GitGuard</div>';
                 }
               }}
             />

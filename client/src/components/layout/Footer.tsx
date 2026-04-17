@@ -111,9 +111,9 @@ const Footer: React.FC = () => {
             </ul>
           </div>
 
-          {/* Mailinblack */}
+          {/* GitGuard */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-300 uppercase mb-6">Mailinblack</h3>
+            <h3 className="text-sm font-semibold text-gray-300 uppercase mb-6">GitGuard</h3>
             <ul className="space-y-3">
               {footerLinks.mailinblack.map((link, index) => (
                 <li key={index}>
@@ -159,7 +159,7 @@ const Footer: React.FC = () => {
           <div className="mb-6 md:mb-0">
             <Image
               src="/logomailinblack2.webp"
-              alt="Mailinblack"
+              alt="GitGuard"
               width={200}
               height={40}
               className="h-10 w-auto opacity-80"
@@ -168,7 +168,7 @@ const Footer: React.FC = () => {
                 target.style.display = 'none';
                 const parent = target.parentElement;
                 if (parent) {
-                  parent.innerHTML = '<div class="text-lg font-semibold text-white">Mailinblack</div>';
+                  parent.innerHTML = '<div class="text-lg font-semibold text-white">GitGuard</div>';
                 }
               }}
             />
@@ -176,7 +176,7 @@ const Footer: React.FC = () => {
 
           {/* Copyright */}
           <div className="text-sm text-gray-400 text-center">
-            © 2024 Mailinblack. All rights reserved.
+            © 2024 GitGuard. All rights reserved.
           </div>
         </div>
       </div>

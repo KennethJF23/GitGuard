@@ -10,55 +10,59 @@ const PlatformTabs: React.FC = () => {
 
   const tabs = [
     {
-      id: 'platform',
-      title: 'Mailinblack Platform',
-      preTitle: 'Mailinblack Platform',
-      description: 'Protect, educate, train: the winning triptych for your cybersecurity',
-      content: 'Mailinblack solutions are a combination of technological innovations that allow you to secure your organization and educate and train your employees against cyber attacks. Let\'s find them on the Mailinblack platform.',
-      videoSrc: '/videos/plateforme.mp4',
+      id: 'analyze',
+      title: 'Repository Analyze',
+      preTitle: 'Analyze Module',
+      description: 'Parse owner/repo input and collect GitHub metadata for risk context',
+      content: 'GitGuard accepts full GitHub URLs or owner/repo shorthand, validates repository identity, and gathers metadata like topics, languages, and README text before scoring.',
+      videoSrc: null,
+      imageSrc: '/images/mysikker2.webp',
       icon: Shield,
       href: '/platform'
     },
     {
-      id: 'protect',
-      title: 'Protect',
-      preTitle: 'Protect',
-      description: 'Strengthen your security and gain productivity and peace of mind with our AI',
-      content: 'Our Protect solution implements an advanced filtering of emails before they are received. Our proprietary AI defuses phishing, spearphishing and ransomware attacks and keeps your teams focused on their legitimate emails.',
-      videoSrc: '/videos/protect.mp4',
+      id: 'scan',
+      title: 'Malware Scan Pipeline',
+      preTitle: 'Scan Module',
+      description: 'Download zipballs, filter files, and match substring/regex indicators',
+      content: 'The pipeline downloads repository archives, extracts source files, skips noisy paths, and scans allowed file types against MongoDB-managed malware keywords with weighted scoring.',
+      videoSrc: null,
+      imageSrc: '/images/mysikker2.webp',
       icon: Shield,
-      href: '/products/mailinblack-spam-protection'
+      href: '/platform'
     },
     {
-      id: 'cyber-coach',
-      title: 'Cyber Coach',
-      preTitle: 'Cyber Coach',
-      description: 'Coach your employees like a high performance team',
-      content: 'Audit your organization and implement a 100% automated attack simulation program with Cyber Coach, the most complete cybersecurity awareness solution on the market.',
-      videoSrc: '/videos/cyber_coach.mp4',
+      id: 'verdict',
+      title: 'Verdict Engine',
+      preTitle: 'Classification Module',
+      description: 'Generate deterministic outcomes from score, categories, and dataset signals',
+      content: 'GitGuard classifies repositories into SAFE, SUSPICIOUS, MALICIOUS, or DANGEROUS DATASET using explicit rules, high-risk category combinations, and confidence checks.',
+      videoSrc: null,
+      imageSrc: '/images/mysikker2.webp',
       icon: Users,
-      href: '/products/mailinblack-phishing-simulation'
+      href: '/platform'
     },
     {
-      id: 'cyber-academy',
-      title: 'Cyber Academy',
-      preTitle: 'Cyber Academy',
-      description: 'Train your teams in cybersecurity with a complete and fun solution',
-      content: 'Cyber Academy is based on the 4 pillars of learning: attention, active engagement, return on error and consolidation. Our e-learning platform offers your employees a complete and fun educational experience in cybersecurity training.',
-      videoSrc: '/videos/cyber_academie.mp4',
+      id: 'cache',
+      title: 'Caching & Performance',
+      preTitle: 'Cache Module',
+      description: 'Reuse previous scan results with hashed Redis keys and TTL controls',
+      content: 'Analyze, AI scan, and malware scan responses are cached with configurable TTLs to reduce repeated API calls and improve response time for popular repositories.',
+      videoSrc: null,
+      imageSrc: '/images/mysikker2.webp',
       icon: GraduationCap,
-      href: '/products/mailinblack-cybersecurity-training'
+      href: '/platform'
     },
     {
-      id: 'sikker',
-      title: 'Sikker',
-      preTitle: 'Sikker',
-      description: 'Simplify password management within your organization',
-      content: 'Sikker transforms the concept of digital security by combining ease of use with robust protection, without making any concessions. With its password manager for enterprises, it provides centralized access management and integrates advanced security features, offering complete peace of mind. Engage your teams in your company\'s cybersecurity to achieve higher levels of digital protection.',
-      videoSrc: null, // Image instead of video for Sikker
+      id: 'auth',
+      title: 'JWT Authentication',
+      preTitle: 'Access Control Module',
+      description: 'Protect scanner workflows with register/login and Bearer token middleware',
+      content: 'GitGuard backend issues JWT tokens on login and verifies Bearer headers in middleware so only authenticated users can access protected security workflows.',
+      videoSrc: null,
       imageSrc: '/images/mysikker2.webp',
       icon: Lock,
-      href: '/products/password-manager'
+      href: '/platform'
     }
   ]
 
@@ -88,12 +92,12 @@ const PlatformTabs: React.FC = () => {
           <div className="inline-flex items-center justify-center mb-8">
             <div className="h-px bg-gray-300 w-20"></div>
             <h2 className="px-6 text-2xl font-semibold uppercase tracking-wider text-gray-900">
-              Platform
+              Backend capabilities
             </h2>
             <div className="h-px bg-gray-300 w-20"></div>
           </div>
           <h3 className="text-3xl md:text-4xl font-bold text-gray-900 max-w-4xl mx-auto">
-            Reduce your risk of being attacked with our cybersecurity solutions
+            From repository intake to malware verdict, each stage is explicit and auditable
           </h3>
         </motion.div>
 

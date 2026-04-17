@@ -8,21 +8,21 @@ import { ArrowRight } from 'lucide-react'
 const Technologies: React.FC = () => {
   const technologies = [
     {
-      title: 'Anti spam',
+      title: 'Keyword intelligence',
       icon: Biohazard,
-      href: '/products/mailinblack-spam-protection/anti-spam-solution',
+      href: '/platform',
       color: 'text-red-500'
     },
     {
-      title: 'Anti malware',
+      title: 'ZIP source scanning',
       icon: Skull,
-      href: '/products/mailinblack-spam-protection/anti-malware-solution',
+      href: '/platform',
       color: 'text-red-600'
     },
     {
-      title: 'Anti spearphishing',
+      title: 'Deterministic verdict engine',
       icon: Target,
-      href: '/products/mailinblack-spam-protection/anti-spearphishing-solution',
+      href: '/platform',
       color: 'text-red-700'
     }
   ]
@@ -63,7 +63,7 @@ const Technologies: React.FC = () => {
           <div className="inline-flex items-center justify-center mb-8">
             <div className="h-px bg-white/20 w-20"></div>
             <h2 className="px-6 text-2xl font-semibold uppercase tracking-wider">
-              Our technologies
+              Detection pipeline
             </h2>
             <div className="h-px bg-white/20 w-20"></div>
           </div>

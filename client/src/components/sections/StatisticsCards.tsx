@@ -15,39 +15,39 @@ const StatisticsCards: React.FC = () => {
 
   const statsData = [
     {
-      percentage: '90%',
-      description: 'of cyber attacks come through email',
+      percentage: '4',
+      description: 'verdict states: SAFE, SUSPICIOUS, MALICIOUS, DANGEROUS DATASET',
       icon: Mail,
       color: 'text-blue-600',
       bgColor: 'bg-blue-600',
       product: {
-        name: 'Protect',
-        description: 'Secure and clean up your emails with Protect',
-        href: '/products/mailinblack-spam-protection'
+        name: 'Verdict Engine',
+        description: 'Rule-based scoring combines keyword matches, categories, and context to classify repository risk',
+        href: '/platform'
       }
     },
     {
-      percentage: '79%',
-      description: 'of attacks are phishing or spearphishing',
+      percentage: '6',
+      description: 'source types scanned in the malware pipeline (.js, .ts, .py, .sh, .json, .env)',
       icon: GraduationCap,
       color: 'text-blue-600',
       bgColor: 'bg-blue-600',
       product: {
-        name: 'Cyber Coach',
-        description: 'Raise awareness and train your employees with Cyber Coach',
-        href: '/products/mailinblack-phishing-simulation'
+        name: 'Source Scanner',
+        description: 'GitHub zipball extraction and filtered source inspection for suspicious indicators',
+        href: '/platform'
       }
     },
     {
-      percentage: '45%',
-      description: 'less cyber attacks thanks to training',
+      percentage: '900s',
+      description: 'default malware scan cache TTL to reduce repeated scans and latency',
       icon: GraduationCap,
       color: 'text-blue-600',
       bgColor: 'bg-blue-600',
       product: {
-        name: 'Cyber Academy',
-        description: 'Provide your team with the most complete online training on the market',
-        href: '/products/mailinblack-cybersecurity-training'
+        name: 'Caching Layer',
+        description: 'Redis-backed caching for analyze, AI scan, and malware scan responses',
+        href: '/platform'
       }
     }
   ]

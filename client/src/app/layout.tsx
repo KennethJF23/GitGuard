@@ -11,16 +11,16 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Email protection solutions for businesses - Mailinblack",
-  description: "Secure your business emails. Train your employees to cyber attacks. Protect your emails with Mailinblack.",
-  keywords: ["email protection", "cybersecurity", "anti spam", "anti phishing", "mailinblack"],
+  title: "GitGuard | GitHub Repository Malware Risk Scanner",
+  description: "Analyze GitHub repositories with keyword intelligence, ZIP source scanning, deterministic malware verdicts, and JWT-secured access.",
+  keywords: ["gitguard", "github security", "repository scanner", "malware detection", "jwt auth", "redis cache"],
   openGraph: {
-    title: "Email protection solutions for businesses - Mailinblack",
-    description: "Secure your business emails. Train your employees to cyber attacks. Protect your emails with Mailinblack.",
+    title: "GitGuard | GitHub Repository Malware Risk Scanner",
+    description: "Analyze GitHub repositories with keyword intelligence, ZIP source scanning, deterministic malware verdicts, and JWT-secured access.",
     type: "website",
     locale: "en_GB",
-    url: "https://www.mailinblack.com/en/",
-    siteName: "Mailinblack",
+    url: "https://gitguard.local",
+    siteName: "GitGuard",
   },
   twitter: {
     card: "summary_large_image",

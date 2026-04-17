@@ -39,7 +39,7 @@ const HeroBanner: React.FC = () => {
         <div className="absolute inset-0 flex items-center justify-center mb-32" style={{ marginBottom: '50px' }}>
           <SocialOrbit
             rippleCount={6}
-            text='CYBERSECURITY'
+            text='GITGUARD'
             rippleDuration={3}
             textOrbitIndex={2}
             textDuration={20}
@@ -62,16 +62,16 @@ const HeroBanner: React.FC = () => {
           className="text-4xl md:text-6xl font-bold text-gray-900 mb-6 leading-tight"
           variants={itemVariants}
         >
-          Your complete cybersecurity platform
+          GitGuard scans GitHub repositories for malware risk
         </motion.h1>
         
         <motion.div
           className="text-lg md:text-xl text-gray-600 mb-8 max-w-2xl mx-auto"
           variants={itemVariants}
         >
-          Protect your organization from{' '}
-          <span className="font-semibold text-blue-600">human cyber-risk</span>
-          {' '}with U-Cyber 360°: a user-centric offering and solutions at the cutting edge of innovation.
+          Run backend-powered analysis with{' '}
+          <span className="font-semibold text-blue-600">keyword intelligence, ZIP source scanning, and deterministic verdicts</span>
+          {' '}for SAFE, SUSPICIOUS, MALICIOUS, or DANGEROUS DATASET outcomes.
         </motion.div>
         
         <motion.div variants={itemVariants}>
@@ -81,7 +81,7 @@ const HeroBanner: React.FC = () => {
             size="large"
             className="inline-flex"
           >
-            Discover U-Cyber 360°
+            Start a GitGuard scan
           </Button>
         </motion.div>
       </motion.div>

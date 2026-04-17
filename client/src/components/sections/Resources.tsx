@@ -9,27 +9,27 @@ import Image from 'next/image'
 const Resources: React.FC = () => {
   const featuredArticle = {
     image: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
-    category: 'Cybersecurity',
+    category: 'Backend',
     categoryColor: '#b57a97',
-    date: '13.10.2020',
-    title: '5 TIPS TO IDENTIFY A CYBERATTACK ATTEMPT',
-    href: '/ressources/news/how-to-identify-a-cyberattack-attempt/'
+    date: '17.04.2026',
+    title: 'How GitGuard classifies SAFE, SUSPICIOUS, MALICIOUS, and DANGEROUS DATASET',
+    href: '/resources/news/gitguard-verdict-engine'
   }
 
   const otherArticles = [
     {
-      category: 'Product',
+      category: 'Auth',
       categoryColor: '#f38c6d',
-      date: '05.09.2018',
-      title: 'What is a Virtual Private Network (VPN)?',
-      href: '/ressources/news/what-is-a-vpn/'
+      date: '17.04.2026',
+      title: 'JWT register/login flow and Bearer token middleware in GitGuard',
+      href: '/resources/news/gitguard-jwt-auth-flow'
     },
     {
-      category: 'Product',
+      category: 'Performance',
       categoryColor: '#f38c6d',
-      date: '23.02.2018',
-      title: 'What is spoofing?',
-      href: '/ressources/news/what-is-spoofing/'
+      date: '17.04.2026',
+      title: 'Redis cache strategy for analyze, AI scan, and malware scan responses',
+      href: '/resources/news/gitguard-redis-caching'
     }
   ]
 
@@ -69,7 +69,7 @@ const Resources: React.FC = () => {
           <div className="inline-flex items-center justify-center mb-8">
             <div className="h-px bg-gray-300 w-20"></div>
             <h2 className="px-6 text-2xl font-semibold uppercase tracking-wider text-gray-900">
-              ressources
+              resources
             </h2>
             <div className="h-px bg-gray-300 w-20"></div>
           </div>
