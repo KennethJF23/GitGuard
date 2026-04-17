@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { getAuthToken, setAuthSession } from '@/lib/authSession'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -11,6 +12,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSocialSubmitting, setIsSocialSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [nextPath, setNextPath] = useState('/analyze')
 
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
   const githubClientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || ''
@@ -19,16 +21,6 @@ export default function LoginPage() {
     if (typeof window === 'undefined') return ''
     return `${window.location.origin}/login`
   }, [])
-
-  const persistAuth = (data: { token: string; id: string; username: string; email: string }) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('gitguard_token', data.token)
-      localStorage.setItem(
-        'gitguard_user',
-        JSON.stringify({ id: data.id, username: data.username, email: data.email })
-      )
-    }
-  }
 
   const handleSocialResponse = async (endpoint: string, payload: Record<string, unknown>) => {
     setError('')
@@ -48,8 +40,8 @@ export default function LoginPage() {
         return
       }
 
-      persistAuth(data)
-      router.push('/analyze')
+      setAuthSession(data)
+      router.push(nextPath)
     } catch {
       setError('Unable to reach the server for social sign-in.')
     } finally {
@@ -61,10 +53,20 @@ export default function LoginPage() {
     if (typeof window === 'undefined') return
 
     const params = new URLSearchParams(window.location.search)
+    const nextTarget = params.get('next')
+    const redirectTo = nextTarget && nextTarget.startsWith('/') ? nextTarget : '/analyze'
+    setNextPath(redirectTo)
+
     const code = params.get('code')
     const state = params.get('state')
     const emailFromQuery = params.get('email')
     const passwordFromQuery = params.get('password')
+
+    const currentToken = getAuthToken()
+    if (currentToken) {
+      router.replace('/analyze')
+      return
+    }
 
     if (emailFromQuery || passwordFromQuery) {
       if (emailFromQuery) setEmail(emailFromQuery)
@@ -148,9 +150,9 @@ export default function LoginPage() {
         return
       }
 
-      persistAuth(data)
+      setAuthSession(data)
 
-      router.push('/analyze')
+      router.push(nextPath)
     } catch {
       setError('Unable to reach the server. Please check backend connectivity.')
     } finally {

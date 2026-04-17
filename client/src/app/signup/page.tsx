@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { getAuthToken, setAuthSession } from '@/lib/authSession'
 
 export default function SignUpPage() {
   const router = useRouter()
@@ -14,6 +15,13 @@ export default function SignUpPage() {
   const [error, setError] = useState('')
 
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000'
+
+  useEffect(() => {
+    const token = getAuthToken()
+    if (token) {
+      router.replace('/analyze')
+    }
+  }, [router])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -59,13 +67,7 @@ export default function SignUpPage() {
         return
       }
 
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('gitguard_token', data.token)
-        localStorage.setItem(
-          'gitguard_user',
-          JSON.stringify({ id: data.id, username: data.username, email: data.email })
-        )
-      }
+      setAuthSession(data)
 
       router.push('/analyze')
     } catch {

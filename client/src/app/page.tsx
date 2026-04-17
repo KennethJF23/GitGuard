@@ -1,11 +1,11 @@
 import React from 'react'
-import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import HeroBanner from '@/components/sections/HeroBanner'
 import StatsSection  from '@/components/sections/StatisticsCards'
 import FeaturesShowcase from '@/components/sections/FeaturesShowcase'
 import PlatformTabs from '@/components/sections/PlatformTabs'
 import HowItWorks from '@/components/sections/HowItWorks'
+import FinalCta from '@/components/sections/FinalCta'
 
 const Home: React.FC = () => {
   return (
