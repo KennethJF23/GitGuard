@@ -4,6 +4,9 @@ import React, { useState } from 'react'
 import { ChevronDown, ArrowLeft, Menu, X, Globe } from 'lucide-react'
 import Button from '../ui/Button'
 import Image from 'next/image'
+import Link from 'next/link'
+
+const isExternalHref = (href: string): boolean => href.startsWith('http://') || href.startsWith('https://')
 
 const Header: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -150,7 +153,7 @@ const Header: React.FC = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
-          <a href="/" className="flex items-center">
+          <Link href="/" className="flex items-center">
             <Image
               src="/logomailinblack2.webp"
               alt="GitGuard"
@@ -166,7 +169,7 @@ const Header: React.FC = () => {
                 }
               }}
             />
-          </a>
+          </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center space-x-8">
@@ -202,12 +205,12 @@ const Header: React.FC = () => {
                                   </div>
                                 )}
                                 <div className="flex-1">
-                                  <a
+                                  <Link
                                     href={subItem.href}
                                     className="font-medium text-gray-900 hover:text-blue-600 transition-colors"
                                   >
                                     {subItem.title}
-                                  </a>
+                                  </Link>
                                   {subItem.description && (
                                     <p className="text-sm text-gray-600 mt-1">
                                       {subItem.description}
@@ -230,12 +233,12 @@ const Header: React.FC = () => {
                               <ul className="space-y-2">
                                 {category.links.map((link: any, linkIndex: number) => (
                                   <li key={linkIndex}>
-                                    <a
+                                    <Link
                                       href={link.href}
                                       className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
                                     >
                                       {link.title}
-                                    </a>
+                                    </Link>
                                   </li>
                                 ))}
                               </ul>
@@ -248,14 +251,23 @@ const Header: React.FC = () => {
                         <ul className="space-y-2">
                           {item.items.map((subItem: any, index) => (
                             <li key={index}>
-                              <a
-                                href={subItem.href}
-                                target={subItem.external ? '_blank' : '_self'}
-                                rel={subItem.external ? 'noopener noreferrer' : ''}
-                                className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
-                              >
-                                {subItem.title}
-                              </a>
+                              {subItem.external || isExternalHref(subItem.href) ? (
+                                <a
+                                  href={subItem.href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
+                                >
+                                  {subItem.title}
+                                </a>
+                              ) : (
+                                <Link
+                                  href={subItem.href}
+                                  className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
+                                >
+                                  {subItem.title}
+                                </Link>
+                              )}
                             </li>
                           ))}
                         </ul>
@@ -278,7 +290,7 @@ const Header: React.FC = () => {
               </button>
               <div className="absolute top-full right-0 mt-2 w-32 bg-white rounded-lg shadow-xl border border-gray-200 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                 {languages.map((lang) => (
-                  <a
+                  <Link
                     key={lang.code}
                     href={`/${lang.code}`}
                     className={`block px-4 py-2 text-sm ${
@@ -286,7 +298,7 @@ const Header: React.FC = () => {
                     } transition-colors`}
                   >
                     {lang.name}
-                  </a>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -332,13 +344,25 @@ const Header: React.FC = () => {
                 {activeSubmenu === item.submenu && (
                   <div className="mt-2 pl-4 space-y-2">
                     {item.items.map((subItem: any, index) => (
-                      <a
-                        key={index}
-                        href={subItem.href}
-                        className="block py-2 text-sm text-gray-700 hover:text-blue-600 transition-colors"
-                      >
-                        {subItem.title}
-                      </a>
+                      subItem.href && !isExternalHref(subItem.href) ? (
+                        <Link
+                          key={index}
+                          href={subItem.href}
+                          className="block py-2 text-sm text-gray-700 hover:text-blue-600 transition-colors"
+                        >
+                          {subItem.title}
+                        </Link>
+                      ) : subItem.href ? (
+                        <a
+                          key={index}
+                          href={subItem.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block py-2 text-sm text-gray-700 hover:text-blue-600 transition-colors"
+                        >
+                          {subItem.title}
+                        </a>
+                      ) : null
                     ))}
                   </div>
                 )}
