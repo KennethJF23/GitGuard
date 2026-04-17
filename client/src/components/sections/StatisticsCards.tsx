@@ -1,213 +1,55 @@
-'use client'
+import { ShieldCheck, GitFork, Users2, CheckCircle2 } from "lucide-react";
 
-import React, { useState } from 'react'
-import { Swiper, SwiperSlide } from 'swiper/react'
-import { Navigation, Pagination, Autoplay } from 'swiper/modules'
-import { motion } from 'framer-motion'
-import { Mail, GraduationCap, ArrowRight } from 'lucide-react'
-import Button from '../ui/Button'
-import 'swiper/css'
-import 'swiper/css/navigation'
-import 'swiper/css/pagination'
-
-const StatisticsCards: React.FC = () => {
-  const [swiper, setSwiper] = useState<any>(null)
-
-  const statsData = [
+function StatsSection() {
+  const stats = [
     {
-      percentage: '4',
-      description: 'verdict states: SAFE, SUSPICIOUS, MALICIOUS, DANGEROUS DATASET',
-      icon: Mail,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-600',
-      product: {
-        name: 'Verdict Engine',
-        description: 'Rule-based scoring combines keyword matches, categories, and context to classify repository risk',
-        href: '/platform'
-      }
+      icon: GitFork,
+      value: "10,000+",
+      label: "Repositories Analyzed",
+      color: "#58a6ff",
+    },
+    { icon: Users2, value: "5,000+", label: "Active Users", color: "#3fb950" },
+    {
+      icon: ShieldCheck,
+      value: "98%",
+      label: "Security Accuracy",
+      color: "#f0883e",
     },
     {
-      percentage: '6',
-      description: 'source types scanned in the malware pipeline (.js, .ts, .py, .sh, .json, .env)',
-      icon: GraduationCap,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-600',
-      product: {
-        name: 'Source Scanner',
-        description: 'GitHub zipball extraction and filtered source inspection for suspicious indicators',
-        href: '/platform'
-      }
+      icon: CheckCircle2,
+      value: "15,000+",
+      label: "Licenses Verified",
+      color: "#a371f7",
     },
-    {
-      percentage: '900s',
-      description: 'default malware scan cache TTL to reduce repeated scans and latency',
-      icon: GraduationCap,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-600',
-      product: {
-        name: 'Caching Layer',
-        description: 'Redis-backed caching for analyze, AI scan, and malware scan responses',
-        href: '/platform'
-      }
-    }
-  ]
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        duration: 0.6,
-        staggerChildren: 0.2
-      }
-    }
-  }
-
-  const slideVariants = {
-    hidden: { y: 50, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        duration: 0.6
-      }
-    }
-  }
+  ];
 
   return (
-    <section className="py-16 bg-gradient-to-r from-blue-600 to-blue-800 text-white">
-      <div className="container mx-auto px-4">
-        <motion.div
-          className="max-w-6xl mx-auto"
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true }}
-        >
-          <Swiper
-            modules={[Navigation, Pagination, Autoplay]}
-            spaceBetween={30}
-            slidesPerView={1}
-            navigation={{
-              nextEl: '.swiper-button-next',
-              prevEl: '.swiper-button-prev',
-            }}
-            pagination={{
-              clickable: true,
-              el: '.swiper-pagination',
-            }}
-            autoplay={{
-              delay: 5000,
-              disableOnInteraction: false,
-            }}
-            loop={true}
-            onSwiper={setSwiper}
-            className="statistics-swiper"
-          >
-            {statsData.map((stat, index) => (
-              <SwiperSlide key={index}>
-                <motion.div
-                  variants={slideVariants}
-                  className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20"
-                >
-                  <div className="grid md:grid-cols-2 gap-8 items-center">
-                    {/* Left side - Percentage */}
-                    <div className="text-center md:text-left">
-                      <motion.div
-                        className="text-6xl md:text-7xl font-bold mb-4"
-                        initial={{ scale: 0 }}
-                        whileInView={{ scale: 1 }}
-                        transition={{ duration: 0.5, delay: 0.2 }}
-                      >
-                        {stat.percentage}
-                      </motion.div>
-                      <p className="text-lg text-blue-100 mb-6">
-                        {stat.description}
-                      </p>
-                      
-                      {/* Learn More Button */}
-                      <div className="hidden md:block">
-                        <Button
-                          variant="secondary"
-                          size="small"
-                          className="text-white border-white hover:bg-white hover:text-blue-600"
-                        >
-                          Learn more
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Right side - Product Info */}
-                    <div className="bg-white/5 rounded-xl p-6 border border-white/10">
-                      <div className="flex items-center mb-4">
-                        <div className="bg-white/20 rounded-lg p-3 mr-4">
-                          <stat.icon className="w-8 h-8 text-white" />
-                        </div>
-                        <h3 className="text-xl font-semibold">
-                          <a
-                            href={stat.product.href}
-                            className="hover:text-blue-200 transition-colors"
-                          >
-                            {stat.product.name}
-                          </a>
-                        </h3>
-                      </div>
-                      
-                      <p className="text-blue-100 mb-4 text-sm">
-                        {stat.product.description}
-                      </p>
-                      
-                      <Button
-                        variant="secondary"
-                        size="small"
-                        href={stat.product.href}
-                        className="text-white border-white hover:bg-white hover:text-blue-600 w-full md:w-auto"
-                      >
-                        Learn more
-                      </Button>
-                    </div>
-                  </div>
-                </motion.div>
-              </SwiperSlide>
-            ))}
-          </Swiper>
-
-          {/* Custom Navigation */}
-          <div className="flex justify-center items-center mt-8 space-x-4">
-            <button
-              className="swiper-button-prev bg-white/20 hover:bg-white/30 rounded-full p-3 transition-colors"
-              onClick={() => swiper?.slidePrev()}
-            >
-              <ArrowRight className="w-5 h-5 rotate-180" />
-            </button>
-            
-            <div className="swiper-pagination flex space-x-2"></div>
-            
-            <button
-              className="swiper-button-next bg-white/20 hover:bg-white/30 rounded-full p-3 transition-colors"
-              onClick={() => swiper?.slideNext()}
-            >
-              <ArrowRight className="w-5 h-5" />
-            </button>
-          </div>
-        </motion.div>
+    <section className="py-10 sm:py-12 bg-background border-y border-[#30363d]">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-14">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
+          {stats.map((stat, index) => (
+            <div key={index} className="text-center group">
+              <div
+                className="rs-glow inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-lg bg-surface-1 border border-[#30363d] mb-3 sm:mb-4 group-hover:border-[#58a6ff] transition-all"
+                // style={{ "--rs-glow-color": stat.color }}
+              >
+                <stat.icon
+                  className="w-6 h-6 sm:w-7 sm:h-7"
+                  style={{ color: stat.color }}
+                />
+              </div>
+              <div className="rs-text-glow text-2xl sm:text-3xl font-bold text-white mb-1">
+                {stat.value}
+              </div>
+              <div className="text-xs sm:text-sm text-[#8b949e]">
+                {stat.label}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-
-      <style jsx>{`
-        .statistics-swiper .swiper-pagination-bullet {
-          background: rgba(255, 255, 255, 0.5);
-          opacity: 1;
-          width: 8px;
-          height: 8px;
-          margin: 0 4px;
-        }
-        
-        .statistics-swiper .swiper-pagination-bullet-active {
-          background: white;
-        }
-      `}</style>
     </section>
-  )
+  );
 }
 
-export default StatisticsCards
+export default StatsSection;

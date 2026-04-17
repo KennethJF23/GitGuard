@@ -10,7 +10,7 @@ const unzipper = require("unzipper");
 const mongoose = require("mongoose");
 
 const { redisGetJson, redisSetJson } = require("../config/redis");
-const MalwareKeyword = require("../models/malwareKeyword.model");
+const MalwareKeyword = require("../models/malwareKeywords.models");
 const { scanGithubRepoForMalwarePipeline } = require("../services/malwareScanPipeline");
 
 // In-memory cache to avoid repeated MongoDB calls.

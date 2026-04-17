@@ -3,6 +3,14 @@ const bcrypt = require("bcrypt");
 
 const User = require("../models/user.models");
 
+const normalizeEmail = (value) => {
+    return typeof value === "string" ? value.trim().toLowerCase() : "";
+};
+
+const looksLikeBcryptHash = (value) => {
+    return typeof value === "string" && /^\$2[aby]\$\d{2}\$/.test(value);
+};
+
 
 const generateToken = (id) => {
     return jwt.sign({id},process.env.JWT_SECRET,{expiresIn:"7d"});
@@ -11,22 +19,24 @@ const generateToken = (id) => {
 exports.register = async (req,res) => {
     try{
         const {username,email,password} = req.body;
+        const normalizedEmail = normalizeEmail(email);
+        const normalizedUsername = typeof username === "string" ? username.trim() : "";
 
-        if (!username || !email || !password) {
+        if (!normalizedUsername || !normalizedEmail || !password) {
             return res.status(400).json({ message: "username, email, and password are required" });
         }
 
-        const userExist = await User.findOne({email});
+        const userExist = await User.findOne({email: normalizedEmail});
 
         if(userExist){
-            return res.status(400).json({message:"User already exist"});
+            return res.status(409).json({message:"User already exist"});
         }
 
         const hashPassword = await bcrypt.hash(password,10);
         
         const user = await User.create({
-            username,
-            email,
+            username: normalizedUsername,
+            email: normalizedEmail,
             password:hashPassword
         })
 
@@ -56,21 +66,36 @@ exports.register = async (req,res) => {
 exports.login = async (req,res) => {
     try{
         const {email,password} = req.body;
+        const normalizedEmail = normalizeEmail(email);
 
-        if (!email || !password) {
+        if (!normalizedEmail || !password) {
             return res.status(400).json({ message: "email and password are required" });
         }
 
-        const user = await User.findOne({email});
+        const user = await User.findOne({email: normalizedEmail});
 
         if(!user){
-            return res.status(400).json({message:"Invalid Credential or Create User"});
+            return res.status(401).json({message:"Invalid email or password"});
         }
 
-        const IsMatch = await bcrypt.compare(password,user.password);
+        if (typeof user.password !== "string" || user.password.length === 0) {
+            return res.status(401).json({message:"This account uses social login. Please continue with Google/GitHub."});
+        }
+
+        let IsMatch = false;
+        if (looksLikeBcryptHash(user.password)) {
+            IsMatch = await bcrypt.compare(password, user.password);
+        } else {
+            // Legacy plaintext fallback: allow login once, then upgrade hash.
+            IsMatch = password === user.password;
+            if (IsMatch) {
+                user.password = await bcrypt.hash(password, 10);
+                await user.save();
+            }
+        }
 
         if(!IsMatch){
-            return res.status(400).json({message:"Invalid Password"});
+            return res.status(401).json({message:"Invalid email or password"});
         }
 
         res.json({

@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Shield, Users, GraduationCap, Lock } from 'lucide-react'
 import Button from '../ui/Button'
+import Image from 'next/image'
 
 const PlatformTabs: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0)
@@ -65,12 +66,6 @@ const PlatformTabs: React.FC = () => {
       href: '/platform'
     }
   ]
-
-  const tabVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 },
-    exit: { opacity: 0, y: -20 }
-  }
 
   const contentVariants = {
     hidden: { opacity: 0, x: 50 },
@@ -161,7 +156,7 @@ const PlatformTabs: React.FC = () => {
 
               {/* Right Content - Video/Image */}
               <div className="relative">
-                <div className="bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl p-8">
+                <div className="bg-linear-to-br from-blue-100 to-purple-100 rounded-2xl p-8">
                   {tabs[activeTab].videoSrc ? (
                     <div className="relative rounded-xl overflow-hidden bg-black">
                       <video
@@ -180,7 +175,7 @@ const PlatformTabs: React.FC = () => {
                         }}
                       >
                         <source src={tabs[activeTab].videoSrc} type="video/mp4" />
-                        <source src={tabs[activeTab].videoSrc?.replace('.mp4', '.webm')} type="video/webm" />
+                        {/* <source src={tabs[activeTab].videoSrc?.replace('.mp4', '.webm')} type="video/webm" /> */}
                       </video>
                       
                       {/* Play Button Overlay */}
@@ -192,9 +187,11 @@ const PlatformTabs: React.FC = () => {
                     </div>
                   ) : (
                     <div className="rounded-xl overflow-hidden">
-                      <img
+                      <Image
                         src={tabs[activeTab].imageSrc}
                         alt={tabs[activeTab].title}
+                        width={1280}
+                        height={720}
                         className="w-full h-auto rounded-xl"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;

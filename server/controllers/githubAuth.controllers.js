@@ -1,6 +1,6 @@
 const axios = require("axios");
 const jwt = require("jsonwebtoken");
-const User = require("../models/users.models");
+const User = require("../models/user.models");
 
 const GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token";
 const GITHUB_USER_URL = "https://api.github.com/user";

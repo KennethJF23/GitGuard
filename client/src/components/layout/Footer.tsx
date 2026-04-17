@@ -1,187 +1,204 @@
-'use client'
+import { Microchip } from "lucide-react";
+import Image from "next/image";
 
-import React from 'react'
-import { ArrowRight } from 'lucide-react'
-import Image from 'next/image'
 
-const Footer: React.FC = () => {
-  const productCards = [
-    {
-      title: 'Protect',
-      icon: 'envelope',
-      href: '/products/mailinblack-spam-protection'
-    },
-    {
-      title: 'Cyber Coach',
-      icon: 'graduation-cap',
-      href: '/products/mailinblack-phishing-simulation'
-    },
-    {
-      title: 'Cyber Academy',
-      icon: 'graduation-cap',
-      href: '/products/mailinblack-cybersecurity-training'
-    },
-    {
-      title: 'Sikker',
-      icon: 'shield-keyhole',
-      href: '/products/password-manager'
-    }
-  ]
-
-  const footerLinks = {
-    solutions: [
-      { title: 'Anti spam', href: '/products/mailinblack-spam-protection/anti-spam-solution' },
-      { title: 'Anti malware', href: '/products/mailinblack-spam-protection/anti-malware-solution' },
-      { title: 'Anti ransomware', href: '/products/mailinblack-spam-protection/anti-ransomware-solution' },
-      { title: 'Anti phishing', href: '/products/mailinblack-spam-protection/anti-phishing-solution' },
-      { title: 'Anti spearphishing', href: '/products/mailinblack-spam-protection/anti-spearphishing-solution' },
-      { title: 'Right to disconnect', href: '/products/mailinblack-spam-protection/right-to-disconnect' },
-      { title: 'Audit of human vulnerabilities', href: '/products/mailinblack-phishing-simulation/audit-of-human-vulnerabilities' },
-      { title: 'Phishing simulation', href: '/products/mailinblack-phishing-simulation/phishing-simulation' },
-      { title: 'Ransomware simulation', href: '/products/mailinblack-phishing-simulation/ransomware-simulation' },
-      { title: 'Cyber attacks simulation', href: '/products/mailinblack-phishing-simulation/cyberattacks-simulation' },
-      { title: 'Password generator', href: '/password-generator' },
-      { title: 'Password manager', href: '/products/password-manager' }
-    ],
-    mailinblack: [
-      { title: 'News', href: '/resources/news' },
-      { title: 'About us', href: '/company' },
-      { title: 'Partners', href: '/partners' },
-      { title: 'User area', href: 'https://app.mailinblack.com/#/login' },
-      { title: 'Partners Area', href: 'https://qg.mailinblack.com/login' }
-    ],
-    contact: [
-      { title: 'Jobs', href: 'https://carriere.mailinblack.com/' },
-      { title: 'Request a demo', href: '/demonstration' },
-      { title: 'Contact us', href: '/contact-us' },
-      { title: 'Open a support ticket', href: '/open-a-support-ticket' }
-    ]
-  }
-
-  const renderIcon = (iconName: string): React.ReactNode => {
-    const iconMap: { [key: string]: React.ReactNode } = {
-      'envelope': <i className="fa-solid fa-envelope" />,
-      'graduation-cap': <i className="fa-solid fa-graduation-cap" />,
-      'shield-keyhole': <i className="fa-solid fa-shield-keyhole" />
-    }
-    return iconMap[iconName] || null
-  }
-
+export function Footer() {
   return (
-    <footer className="bg-black text-white pt-16 pb-8">
-      <div className="container mx-auto px-4">
-        {/* Product Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
-          {productCards.map((card, index) => (
-            <div key={index} className="text-center group cursor-pointer">
-              <div className="flex justify-center mb-4 space-x-2">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="text-blue-400 opacity-60 group-hover:opacity-100 transition-opacity">
-                    {renderIcon(card.icon)}
-                  </div>
-                ))}
-              </div>
+    <footer className="bg-surface-1 text-[#8b949e] pt-8 px-3 sm:pt-12 pb-8 border-t border-[#30363d]">
+      <div className="container mx-auto px-0 sm:px-4 ">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-10 sm:gap-12 mb-12">
+          {/* Brand */}
+          <div className="sm:col-span-2 md:col-span-2">
+            <div className="flex items-center gap-2 mb-4">
+              <Image
+                src="/images/Hero_Image.png"
+                alt="GitGuard Logo"
+                width={40}
+                height={40}
+              />
+              <span className="rs-text-glow font-bold text-xl text-white">GitGuard</span>
+            </div>
+            <p className="text-sm sm:text-base text-[#8b949e] mb-6 max-w-sm leading-relaxed">
+              Making GitHub repositories safer and more reliable for everyone.
+              Evaluate repositories with confidence using our comprehensive
+              analysis tools.
+            </p>
+            <div className="flex flex-wrap gap-3">
               <a
-                href={card.href}
-                className="text-lg font-medium text-white hover:text-blue-400 transition-colors inline-flex items-center"
+                href="#github"
+                className="w-10 h-10 rounded-lg bg-surface-2 border border-[#30363d] flex items-center justify-center hover:border-[#58a6ff] hover:bg-background transition-all"
               >
-                {card.title}
-                <ArrowRight className="ml-2 w-4 h-4" />
+                <Microchip className="w-5 h-5" />
+              </a>
+              <a
+                href="#twitter"
+                className="w-10 h-10 rounded-lg bg-surface-2 border border-[#30363d] flex items-center justify-center hover:border-[#58a6ff] hover:bg-background transition-all"
+              >
+                <Microchip className="w-5 h-5" />
+              </a>
+              <a
+                href="#linkedin"
+                className="w-10 h-10 rounded-lg bg-surface-2 border border-[#30363d] flex items-center justify-center hover:border-[#58a6ff] hover:bg-background transition-all"
+              >
+                <Microchip className="w-5 h-5" />
+              </a>
+              <a
+                href="#email"
+                className="w-10 h-10 rounded-lg bg-surface-2 border border-[#30363d] flex items-center justify-center hover:border-[#58a6ff] hover:bg-background transition-all"
+              >
+                <Microchip className="w-5 h-5" />
               </a>
             </div>
-          ))}
+          </div>
+
+          {/* Links */}
+          <div>
+            <h3 className="font-semibold text-white mb-4">Product</h3>
+            <ul className="space-y-3 text-sm">
+              <li>
+                <a
+                  href="#features"
+                  className="hover:text-[#58a6ff] transition-colors"
+                >
+                  Features
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#how-it-works"
+                  className="hover:text-[#58a6ff] transition-colors"
+                >
+                  How It Works
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#pricing"
+                  className="hover:text-[#58a6ff] transition-colors"
+                >
+                  Pricing
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#api"
+                  className="hover:text-[#58a6ff] transition-colors"
+                >
+                  API
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="font-semibold text-white mb-4">Resources</h3>
+            <ul className="space-y-3 text-sm">
+              <li>
+                <a
+                  href="#docs"
+                  className="hover:text-[#58a6ff] transition-colors"
+                >
+                  Documentation
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#blog"
+                  className="hover:text-[#58a6ff] transition-colors"
+                >
+                  Blog
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#guides"
+                  className="hover:text-[#58a6ff] transition-colors"
+                >
+                  Guides
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#support"
+                  className="hover:text-[#58a6ff] transition-colors"
+                >
+                  Support
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="font-semibold text-white mb-4">Company</h3>
+            <ul className="space-y-3 text-sm">
+              <li>
+                <a
+                  href="#about"
+                  className="hover:text-[#58a6ff] transition-colors"
+                >
+                  About
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#team"
+                  className="hover:text-[#58a6ff] transition-colors"
+                >
+                  Team
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#careers"
+                  className="hover:text-[#58a6ff] transition-colors"
+                >
+                  Careers
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#contact"
+                  className="hover:text-[#58a6ff] transition-colors"
+                >
+                  Contact
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
 
-        {/* Footer Links */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-          {/* Solutions */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-300 uppercase mb-6">Solutions</h3>
-            <ul className="space-y-3">
-              {footerLinks.solutions.map((link, index) => (
-                <li key={index}>
-                  <a
-                    href={link.href}
-                    className="text-sm text-gray-400 hover:text-white transition-colors"
-                  >
-                    {link.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* GitGuard */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-300 uppercase mb-6">GitGuard</h3>
-            <ul className="space-y-3">
-              {footerLinks.mailinblack.map((link, index) => (
-                <li key={index}>
-                  <a
-                    href={link.href}
-                    className="text-sm text-gray-400 hover:text-white transition-colors"
-                    target={link.href.includes('http') ? '_blank' : '_self'}
-                    rel={link.href.includes('http') ? 'noopener noreferrer' : ''}
-                  >
-                    {link.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Contact */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-300 uppercase mb-6">Contact</h3>
-            <ul className="space-y-3">
-              {footerLinks.contact.map((link, index) => (
-                <li key={index}>
-                  <a
-                    href={link.href}
-                    className="text-sm text-gray-400 hover:text-white transition-colors"
-                    target={link.href.includes('http') ? '_blank' : '_self'}
-                    rel={link.href.includes('http') ? 'noopener noreferrer' : ''}
-                  >
-                    {link.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div className="border-t border-gray-800 mb-8"></div>
-
-        {/* Bottom Section */}
-        <div className="flex flex-col md:flex-row justify-between items-center">
-          {/* Logo */}
-          <div className="mb-6 md:mb-0">
-            <Image
-              src="/logomailinblack2.webp"
-              alt="GitGuard"
-              width={200}
-              height={40}
-              className="h-10 w-auto opacity-80"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                const parent = target.parentElement;
-                if (parent) {
-                  parent.innerHTML = '<div class="text-lg font-semibold text-white">GitGuard</div>';
-                }
-              }}
-            />
-          </div>
-
-          {/* Copyright */}
-          <div className="text-sm text-gray-400 text-center">
-            © 2024 GitGuard. All rights reserved.
+        {/* Bottom Bar - Enabled flex-wrap for mobile */}
+        <div className="pt-8 border-t border-[#30363d] flex flex-col md:flex-row justify-between items-center gap-4 text-xs sm:text-sm">
+          <p className="text-center md:text-left">
+            © 2026 GitGuard. All rights reserved.
+          </p>
+          <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
+            <a
+              href="#privacy"
+              className="hover:text-[#58a6ff] transition-colors"
+            >
+              Privacy
+            </a>
+            <a href="#terms" className="hover:text-[#58a6ff] transition-colors">
+              Terms
+            </a>
+            <a
+              href="#security"
+              className="hover:text-[#58a6ff] transition-colors"
+            >
+              Security
+            </a>
+            <a
+              href="#cookies"
+              className="hover:text-[#58a6ff] transition-colors"
+            >
+              Cookies
+            </a>
           </div>
         </div>
       </div>
     </footer>
-  )
+  );
 }
 
-export default Footer
+export default Footer;
