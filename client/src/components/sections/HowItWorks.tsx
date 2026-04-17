@@ -1,91 +1,98 @@
-import { Search, ScanLine, BarChart3, CheckSquare } from "lucide-react";
+'use client'
 
-function HowItWorks() {
-  const steps = [
-    {
-      icon: Search,
-      title: "Enter Repository URL",
-      description:
-        "Simply paste the GitHub repository URL you want to evaluate.",
-      step: "01",
-    },
-    {
-      icon: ScanLine,
-      title: "Automated Analysis",
-      description:
-        "Our system scans the repository for licenses, code quality, and security issues.",
-      step: "02",
-    },
-    {
-      icon: BarChart3,
-      title: "Get Quality Score",
-      description:
-        "Receive a comprehensive score based on multiple quality and safety factors.",
-      step: "03",
-    },
-    {
-      icon: CheckSquare,
-      title: "Make Informed Decision",
-      description:
-        "Use the insights to confidently choose safe and reliable repositories.",
-      step: "04",
-    },
-  ];
+import React from 'react'
+import { motion } from 'framer-motion'
+import { Link2, ScanSearch, ShieldCheck, CircleCheckBig } from 'lucide-react'
 
+const steps = [
+  {
+    step: '01',
+    title: 'Enter Repository URL',
+    description: 'Paste any GitHub repository URL to begin analysis',
+    icon: Link2
+  },
+  {
+    step: '02',
+    title: 'Automated Analysis',
+    description: 'Our system scans for licenses, code quality, and security risks',
+    icon: ScanSearch
+  },
+  {
+    step: '03',
+    title: 'Get Trust Score',
+    description: 'Receive a detailed reliability score with insights',
+    icon: ShieldCheck
+  },
+  {
+    step: '04',
+    title: 'Make Informed Decision',
+    description: 'Use insights to choose safe and high-quality repositories',
+    icon: CircleCheckBig
+  }
+]
+
+const HowItWorks: React.FC = () => {
   return (
-    <section className="py-16 sm:py-20 bg-surface-1">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-10">
-        <div className="text-center mb-12 sm:mb-16">
-          <h2 className="rs-text-glow text-3xl sm:text-4xl font-bold mb-4 text-white">
-            How It Works
-          </h2>
-          <p className="text-base sm:text-lg text-[#8b949e] max-w-2xl mx-auto">
+    <section className="py-16 bg-white">
+      <div className="container mx-auto px-4">
+        <motion.div
+          className="text-center mb-16"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          viewport={{ once: true }}
+        >
+          <div className="inline-flex items-center justify-center mb-8">
+            <div className="h-px bg-gray-300 w-20"></div>
+            <h2 className="px-6 text-2xl font-semibold uppercase tracking-wider text-gray-900">
+              How It Works
+            </h2>
+            <div className="h-px bg-gray-300 w-20"></div>
+          </div>
+          <h3 className="text-3xl md:text-4xl font-bold text-gray-900 max-w-4xl mx-auto">
             Get comprehensive repository insights in four simple steps
-          </p>
-        </div>
+          </h3>
+        </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 sm:gap-8">
-          {steps.map((step, index) => (
-            <div key={index} className="relative">
-              {/* Connector Line */}
-              {index < steps.length - 1 && (
-                <div className="hidden lg:block absolute top-12 left-[calc(50%+2rem)] w-[calc(100%-4rem)] h-px bg-linear-to-r from-surface-3 to-surface-3">
-                  <div
-                    className="absolute inset-0 bg-linear-to-r from-[#58a6ff] to-transparent animate-pulse"
-                    style={{ width: "50%" }}
-                  />
+        <motion.div
+          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={{
+            hidden: { opacity: 0 },
+            visible: {
+              opacity: 1,
+              transition: {
+                staggerChildren: 0.12,
+                duration: 0.4
+              }
+            }
+          }}
+        >
+          {steps.map((item) => (
+            <motion.article
+              key={item.step}
+              variants={{
+                hidden: { opacity: 0, y: 16 },
+                visible: { opacity: 1, y: 0 }
+              }}
+              className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Step {item.step}</span>
+                <div className="h-10 w-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                  <item.icon className="w-5 h-5" />
                 </div>
-              )}
-
-              <div className="relative flex flex-col items-center text-center">
-                {/* Icon Container */}
-                <div className="relative mb-5 sm:mb-6">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-background border-2 border-[#30363d] flex items-center justify-center group-hover:border-[#58a6ff] transition-all">
-                    <step.icon className="w-8 h-8 sm:w-10 sm:h-10 text-[#58a6ff]" />
-                  </div>
-
-                  {/* Step Number */}
-                  <div
-                    className="rs-glow absolute -top-2 -right-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#58a6ff] text-white text-xs sm:text-sm font-bold flex items-center justify-center shadow-lg"
-                    // style={{ "--rs-glow-color": "#58a6ff" }}
-                  >
-                    {step.step}
-                  </div>
-                </div>
-
-                <h3 className="text-lg sm:text-xl font-semibold mb-2 text-white">
-                  {step.title}
-                </h3>
-                <p className="text-sm sm:text-base text-[#8b949e] leading-relaxed max-w-62.5 sm:max-w-none">
-                  {step.description}
-                </p>
               </div>
-            </div>
+              <h4 className="text-xl font-semibold text-gray-900 mb-3">{item.title}</h4>
+              <p className="text-sm text-gray-600 leading-relaxed">{item.description}</p>
+            </motion.article>
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
-  );
+  )
 }
 
-export default HowItWorks;
+export default HowItWorks
