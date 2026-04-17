@@ -1,387 +1,432 @@
-'use client'
+"use client"
 
-import React, { useState } from 'react'
-import { ChevronDown, Menu, X, Globe } from 'lucide-react'
-import Button from '../ui/Button'
-import Image from 'next/image'
+import { type MouseEvent, useEffect, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
+import { usePathname, useRouter } from 'next/navigation'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Menu, X } from 'lucide-react'
 
-type SecureMenuItem = {
-  title: string
-  description?: string
-  icon?: string
+type HeaderProps = {
+  onLogin?: () => void
+  onRegister?: () => void
+}
+
+type NavItem = {
+  label: string
   href: string
-  large?: boolean
-  external?: boolean
+  activeOn: string[]
 }
 
-type SolutionCategory = {
-  category: string
-  links: { title: string; href: string }[]
-}
-
-type BasicMenuItem = {
-  title: string
+type GuestNavItem = {
+  label: string
   href: string
-  external?: boolean
+  sectionId: string
 }
 
-type HeaderMenuItem = {
-  title: string
-  submenu: string
-  items: SecureMenuItem[] | SolutionCategory[] | BasicMenuItem[]
-}
+const guestNavItems: GuestNavItem[] = [
+  { label: 'Home', href: '/#home', sectionId: 'home' },
+  { label: 'Stats', href: '/#stats', sectionId: 'stats' },
+  { label: 'Features', href: '/#features', sectionId: 'features' },
+  { label: 'How it Works', href: '/#how-it-works', sectionId: 'how-it-works' },
+]
 
-const Header: React.FC = () => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
+export default function Header({ onLogin, onRegister }: HeaderProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [activeGuestSection, setActiveGuestSection] = useState('home')
 
-  const menuItems: HeaderMenuItem[] = [
-    {
-      title: 'Secure your organization',
-      submenu: 'secure',
-      items: [
-        {
-          title: 'U-Cyber 360°',
-          description: 'The most comprehensive cybersecurity solution to reduce your human risks',
-          icon: 'shield-halved',
-          href: '/platform',
-          large: true
-        },
-        {
-          title: 'Protect',
-          description: 'Email protection, essential in the fight against cyber attacks and spam',
-          icon: 'envelope',
-          href: '/products/mailinblack-spam-protection'
-        },
-        {
-          title: 'Sikker',
-          description: 'The simple, secure password manager for professionals',
-          icon: 'lock',
-          href: '/products/password-manager'
-        },
-        {
-          title: 'Cyber Coach',
-          description: 'Awareness via attack simulations, the pillar of your cybersecurity',
-          icon: 'graduation-cap',
-          href: '/products/mailinblack-phishing-simulation'
-        },
-        {
-          title: 'Cyber Academy',
-          description: 'Cybersecurity training via an interactive e-learning platform',
-          icon: 'graduation-cap',
-          href: '/products/mailinblack-cybersecurity-training'
-        }
-      ]
-    },
-    {
-      title: 'Solutions',
-      submenu: 'solutions',
-      items: [
-        {
-          category: 'Cyber attack protection',
-          links: [
-            { title: 'Anti malware', href: '/products/mailinblack-spam-protection/anti-malware-solution' },
-            { title: 'Anti phishing', href: '/products/mailinblack-spam-protection/anti-phishing-solution' },
-            { title: 'Anti spearphishing', href: '/products/mailinblack-spam-protection/anti-spearphishing-solution' },
-            { title: 'Anti ransomware', href: '/products/mailinblack-spam-protection/anti-ransomware-solution' }
-          ]
-        },
-        {
-          category: 'Security & Employee Tools',
-          links: [
-            { title: 'Anti spam', href: '/products/mailinblack-spam-protection/anti-spam-solution' },
-            { title: 'Password manager', href: '/products/password-manager' },
-            { title: 'Right to disconnect', href: '/products/mailinblack-spam-protection/right-to-disconnect' },
-            { title: 'Password generator', href: '/password-generator' }
-          ]
-        },
-        {
-          category: 'Awareness & Training',
-          links: [
-            { title: 'Cybersecurity training', href: '/products/mailinblack-cybersecurity-training' },
-            { title: 'Audit of human vulnerabilities', href: '/products/mailinblack-phishing-simulation/audit-of-human-vulnerabilities' },
-            { title: 'Phishing simulation', href: '/products/mailinblack-phishing-simulation/phishing-simulation' },
-            { title: 'Ransomware simulation', href: '/products/mailinblack-phishing-simulation/ransomware-simulation' }
-          ]
-        }
-      ]
-    },
-    {
-      title: 'Resources',
-      submenu: 'resources',
-      items: [
-        { title: 'News', href: '/resources/news' },
-        { title: 'Cybersecurity', href: '/expertises/cybersecurity' },
-        { title: 'GDPR', href: '/expertises/gdpr' },
-        { title: 'Product', href: '/expertises/product' },
-        { title: 'Spam', href: '/expertises/spam-en' },
-        { title: 'Well-Being', href: '/expertises/well-being' }
-      ]
-    },
-    {
-      title: 'Analysis',
-      submenu: 'analysis',
-      items: [
-        { title: 'Human Analysis', href: '/human-analysis' },
-        { title: 'AI Analysis', href: '/ai-analysis' },
-        { title: 'Malware Detection', href: '/malware-detection' }
-      ]
-    },
-    {
-      title: 'GitGuard',
-      submenu: 'mailinblack',
-      items: [
-        { title: 'Company', href: '/company' },
-        { title: 'Mission', href: '/company/mission' }
-      ]
-    },
-    {
-      title: 'Partners',
-      submenu: 'partners',
-      items: [
-        { title: 'Discover the program', href: '/partners' },
-        { title: 'Partner area', href: 'https://partner.mailinblack.com/login', external: true }
-      ]
-    }
+  const authedNavItems: NavItem[] = [
+    { label: 'Home', href: '/', activeOn: ['/'] },
+    { label: 'Human Analyzer', href: '/analyze', activeOn: ['/analyze'] },
+    { label: 'AI Analyzer', href: '/ai-analyze', activeOn: ['/ai-analyze', '/ai-analysis'] },
+    { label: 'Malware Detector', href: '/malware-detection', activeOn: ['/malware-detection', '/malware'] },
   ]
 
-  const languages = [
-    { code: 'en', name: 'English', active: true },
-    { code: 'fr', name: 'Français' },
-    { code: 'es', name: 'Español' },
-    { code: 'nl', name: 'Nederlands' }
-  ]
+  const token = useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof window === 'undefined') return () => {}
 
-  const toggleSubmenu = (submenu: string) => {
-    setActiveSubmenu(activeSubmenu === submenu ? null : submenu)
+      const handleChange = () => onStoreChange()
+      window.addEventListener('storage', handleChange)
+      window.addEventListener('focus', handleChange)
+
+      return () => {
+        window.removeEventListener('storage', handleChange)
+        window.removeEventListener('focus', handleChange)
+      }
+    },
+    () => {
+      if (typeof window === 'undefined') return null
+      return localStorage.getItem('gitguard_token')
+    },
+    () => null,
+  )
+
+  const isAuthed = Boolean(token)
+
+  const isRouteActive = (paths: string[]) => {
+    return paths.some((basePath) => pathname === basePath || pathname.startsWith(`${basePath}/`))
   }
 
-  const renderIcon = (iconName: string): React.ReactNode => {
-    const iconMap: { [key: string]: React.ReactNode } = {
-      'shield-halved': <i className="fa-solid fa-shield-halved" />,
-      'envelope': <i className="fa-solid fa-envelope" />,
-      'lock': <i className="fa-solid fa-lock" />,
-      'graduation-cap': <i className="fa-solid fa-graduation-cap" />,
-      'globe': <i className="fa-solid fa-globe" />,
-      'atom': <i className="fa-solid fa-atom" />,
-      'database': <i className="fa-solid fa-database" />,
-      'paper-plane': <i className="fa-solid fa-paper-plane" />,
-      'at': <i className="fa-solid fa-at" />
+  useEffect(() => {
+    setIsMobileMenuOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || isAuthed || pathname !== '/') {
+      return
     }
-    return iconMap[iconName] || null
+
+    const ids = guestNavItems.map((item) => item.sectionId)
+
+    const updateActiveSection = () => {
+      const offsetPosition = window.scrollY + 130
+      let current = ids[0]
+
+      ids.forEach((id) => {
+        const section = document.getElementById(id)
+        if (section && offsetPosition >= section.offsetTop) {
+          current = id
+        }
+      })
+
+      setActiveGuestSection(current)
+    }
+
+    updateActiveSection()
+    window.addEventListener('scroll', updateActiveSection, { passive: true })
+    window.addEventListener('resize', updateActiveSection)
+
+    return () => {
+      window.removeEventListener('scroll', updateActiveSection)
+      window.removeEventListener('resize', updateActiveSection)
+    }
+  }, [isAuthed, pathname])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || isAuthed || pathname !== '/') {
+      return
+    }
+
+    const pendingSection = window.sessionStorage.getItem('gitguard_pending_section')
+    const hashSection = window.location.hash.replace('#', '')
+    const targetSection = pendingSection || hashSection
+
+    if (!targetSection) {
+      return
+    }
+
+    window.sessionStorage.removeItem('gitguard_pending_section')
+
+    const timer = window.setTimeout(() => {
+      scrollToSection(targetSection)
+    }, 90)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [isAuthed, pathname])
+
+  const navLinkClass = (isActive: boolean) =>
+    `inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold tracking-wide transition-all duration-200 ${
+      isActive
+        ? 'bg-linear-to-r from-[#1f6feb]/90 to-[#58a6ff]/70 text-white shadow-[0_6px_24px_rgba(31,111,235,0.35)]'
+        : 'text-[#c9d1d9] hover:text-white hover:bg-white/10'
+    }`
+
+  const handleSignOut = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('gitguard_token')
+      localStorage.removeItem('gitguard_user')
+    }
+    setIsMobileMenuOpen(false)
+    router.push('/')
   }
+
+  const closeMobileMenu = () => setIsMobileMenuOpen(false)
+
+  const scrollToSection = (sectionId: string, updateHash = true) => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const section = document.getElementById(sectionId)
+    if (!section) {
+      return
+    }
+
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setActiveGuestSection(sectionId)
+
+    if (updateHash) {
+      window.history.replaceState(null, '', `/#${sectionId}`)
+    }
+  }
+
+  const handleGuestNavClick = (event: MouseEvent<HTMLAnchorElement>, sectionId: string) => {
+    closeMobileMenu()
+
+    if (pathname === '/') {
+      event.preventDefault()
+      scrollToSection(sectionId)
+      return
+    }
+
+    event.preventDefault()
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem('gitguard_pending_section', sectionId)
+    }
+    router.push('/')
+  }
+
+  const openLogin = () => {
+    if (onLogin) {
+      onLogin()
+      return
+    }
+    router.push('/login')
+  }
+
+  const openRegister = () => {
+    if (onRegister) {
+      onRegister()
+      return
+    }
+    router.push('/signup')
+  }
+
+  const mobileMenuTransition = { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const }
 
   return (
-    <header className="header bg-white shadow-sm relative z-50">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-20">
-          {/* Logo */}
-          <Link href="/" className="flex items-center">
-            <Image
-              src="/logomailinblack2.webp"
-              alt="GitGuard"
-              width={170}
-              height={34}
-              className="h-8 w-auto"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                const parent = target.parentElement;
-                if (parent) {
-                  parent.innerHTML = '<div class="text-2xl font-bold text-blue-600">GitGuard</div>';
-                }
-              }}
-            />
+    <motion.header
+      initial={false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0b1220]/88 backdrop-blur-xl"
+    >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[#58a6ff]/70 to-transparent" />
+
+      <div className="container mx-auto px-4 sm:px-6 lg:px-10">
+        <div className="flex h-18 items-center justify-between gap-4">
+          <Link
+            href="/"
+            aria-label="GitGuard home"
+            className="group inline-flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-2.5 py-2 transition-all hover:border-[#58a6ff]/45 hover:bg-white/10"
+          >
+            <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#58a6ff]/30 bg-[#101d34] shadow-[0_0_0_1px_rgba(88,166,255,0.2),0_6px_18px_rgba(13,24,45,0.45)]">
+              <Image
+                src="/logomailinblack2.webp"
+                alt="GitGuard Logo"
+                width={30}
+                height={30}
+                className="h-7 w-7 object-contain"
+              />
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="rs-text-glow text-lg font-bold tracking-tight text-white">GitGuard</span>
+              <span className="hidden rounded-full border border-white/20 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9fb5d4] sm:inline-flex">
+                Security Suite
+              </span>
+            </span>
           </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center space-x-8">
-            {menuItems.map((item) => (
-              <div
-                key={item.submenu}
-                className="relative"
-                onMouseEnter={() => setActiveSubmenu(item.submenu)}
-                onMouseLeave={() => setActiveSubmenu(null)}
-              >
-                <button
-                  className="flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
-                >
-                  {item.title}
-                  <ChevronDown className="ml-1 w-4 h-4" />
-                </button>
-
-                {/* Dropdown Menu */}
-                {activeSubmenu === item.submenu && (
-                  <div className="absolute top-full left-0 w-96 pt-2">
-                    <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-6">
-                      {item.submenu === 'secure' && (
-                        <div className="space-y-4">
-                          {(item.items as SecureMenuItem[]).map((subItem, index) => (
-                            <div
-                              key={index}
-                              className={`p-4 rounded-lg border ${subItem.large ? 'col-span-2' : ''} hover:bg-gray-50 transition-colors`}
-                            >
-                              <div className="flex items-start space-x-3">
-                                {subItem.icon && (
-                                  <div className="text-blue-600 mt-1">
-                                    {renderIcon(subItem.icon)}
-                                  </div>
-                                )}
-                                <div className="flex-1">
-                                  <a
-                                    href={subItem.href}
-                                    className="font-medium text-gray-900 hover:text-blue-600 transition-colors"
-                                  >
-                                    {subItem.title}
-                                  </a>
-                                  {subItem.description && (
-                                    <p className="text-sm text-gray-600 mt-1">
-                                      {subItem.description}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {item.submenu === 'solutions' && (
-                        <div className="grid grid-cols-3 gap-6">
-                          {(item.items as SolutionCategory[]).map((category, index) => (
-                            <div key={index}>
-                              <h4 className="font-semibold text-xs text-gray-600 uppercase mb-3">
-                                {category.category}
-                              </h4>
-                              <ul className="space-y-2">
-                                {category.links.map((link, linkIndex) => (
-                                  <li key={linkIndex}>
-                                    <a
-                                      href={link.href}
-                                      className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
-                                    >
-                                      {link.title}
-                                    </a>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {item.submenu !== 'secure' && item.submenu !== 'solutions' && (
-                        <ul className="space-y-2">
-                          {(item.items as BasicMenuItem[]).map((subItem, index) => (
-                            <li key={index}>
-                              <a
-                                href={subItem.href}
-                                target={subItem.external ? '_blank' : '_self'}
-                                rel={subItem.external ? 'noopener noreferrer' : ''}
-                                className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
-                              >
-                                {subItem.title}
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
+          <nav className="hidden md:flex items-center rounded-full border border-white/10 bg-white/4 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+            {isAuthed ? (
+              <>
+                {authedNavItems.map((item) => {
+                  const active = isRouteActive(item.activeOn)
+                  return (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      className={navLinkClass(active)}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </>
+            ) : (
+              <>
+                {guestNavItems.map((item) => (
+                  <Link
+                    key={item.sectionId}
+                    href={item.href}
+                    onClick={(event) => handleGuestNavClick(event, item.sectionId)}
+                    className={navLinkClass(pathname === '/' && activeGuestSection === item.sectionId)}
+                    aria-current={pathname === '/' && activeGuestSection === item.sectionId ? 'page' : undefined}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </>
+            )}
           </nav>
 
-          {/* Right side items */}
-          <div className="hidden lg:flex items-center space-x-6">
-            {/* Language Selector */}
-            <div className="relative group">
-              <button className="flex items-center text-sm text-gray-700 hover:text-blue-600 transition-colors">
-                <Globe className="w-4 h-4 mr-1" />
-                English
-                <ChevronDown className="ml-1 w-4 h-4" />
+          <div className="flex items-center gap-2 sm:gap-3">
+            {isAuthed ? (
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="hidden md:inline-flex rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-[#c9d1d9] transition-all hover:border-[#f85149]/50 hover:bg-[#f85149]/12 hover:text-white"
+              >
+                Sign out
               </button>
-              <div className="absolute top-full right-0 mt-2 w-32 bg-white rounded-lg shadow-xl border border-gray-200 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                {languages.map((lang) => (
-                  <a
-                    key={lang.code}
-                    href={`/${lang.code}`}
-                    className={`block px-4 py-2 text-sm ${
-                      lang.active ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
-                    } transition-colors`}
-                  >
-                    {lang.name}
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            {/* Help & User Area */}
-            <a href="https://support.mailinblack.com/en/" className="text-sm text-gray-700 hover:text-blue-600 transition-colors">
-              Help & support
-            </a>
-            <a href="https://app.mailinblack.com/#/login" className="text-sm text-gray-700 hover:text-blue-600 transition-colors">
-              User area
-            </a>
-
-            {/* CTA Button */}
-            <Button href="/demonstration" variant="primary" size="small">
-              Request a demo
-            </Button>
-          </div>
-
-          {/* Mobile Menu Button */}
-          <button
-            className="lg:hidden"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden bg-white border-t border-gray-200">
-          <div className="container mx-auto px-4 py-4">
-            {menuItems.map((item) => (
-              <div key={item.submenu} className="mb-4">
+            ) : (
+              <>
                 <button
-                  className="flex items-center justify-between w-full text-left font-medium text-gray-900 py-2"
-                  onClick={() => toggleSubmenu(item.submenu)}
+                  type="button"
+                  onClick={openLogin}
+                  className="hidden md:inline-flex rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-[#c9d1d9] transition-all hover:border-[#58a6ff]/50 hover:bg-white/8 hover:text-white"
                 >
-                  {item.title}
-                  <ChevronDown className={`w-4 h-4 transition-transform ${activeSubmenu === item.submenu ? 'rotate-180' : ''}`} />
+                  Sign in
                 </button>
-                
-                {activeSubmenu === item.submenu && (
-                  <div className="mt-2 pl-4 space-y-2">
-                    {(item.items as BasicMenuItem[]).map((subItem, index) => (
-                      <a
-                        key={index}
-                        href={subItem.href}
-                        className="block py-2 text-sm text-gray-700 hover:text-blue-600 transition-colors"
-                      >
-                        {subItem.title}
-                      </a>
-                    ))}
+                <button
+                  type="button"
+                  onClick={openRegister}
+                  className="hidden md:inline-flex rounded-full bg-linear-to-r from-[#1f6feb] to-[#58a6ff] px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(31,111,235,0.35)] transition-all hover:brightness-110"
+                >
+                  Create account
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+              className="md:hidden inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/5 p-2 text-[#c9d1d9] transition-all hover:border-[#58a6ff]/50 hover:text-white"
+              aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="mobile-navigation"
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {isMobileMenuOpen ? (
+                  <motion.span
+                    key="menu-close"
+                    initial={false}
+                    animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                    exit={{ opacity: 0, rotate: 90, scale: 0.85 }}
+                    transition={mobileMenuTransition}
+                    className="inline-flex"
+                  >
+                    <X className="h-5 w-5" />
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="menu-open"
+                    initial={false}
+                    animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                    exit={{ opacity: 0, rotate: -90, scale: 0.85 }}
+                    transition={mobileMenuTransition}
+                    className="inline-flex"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+          </div>
+        </div>
+
+        <AnimatePresence initial={false}>
+          {isMobileMenuOpen ? (
+            <motion.nav
+              id="mobile-navigation"
+              className="md:hidden overflow-hidden"
+              initial={false}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={mobileMenuTransition}
+            >
+              <motion.div
+                className="mb-4 rounded-2xl border border-white/10 bg-linear-to-b from-white/10 to-white/5 p-3 shadow-[0_14px_30px_rgba(0,0,0,0.32)]"
+                initial={false}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -6, opacity: 0 }}
+                transition={mobileMenuTransition}
+              >
+                {isAuthed ? (
+                  <div className="grid grid-cols-1 gap-2">
+                    {authedNavItems.map((item) => {
+                      const active = isRouteActive(item.activeOn)
+                      return (
+                        <Link
+                          key={item.label}
+                          href={item.href}
+                          onClick={closeMobileMenu}
+                          className={
+                            'rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition-all ' +
+                            (active
+                              ? 'border-[#58a6ff]/50 bg-[#1f6feb]/20 text-white'
+                              : 'border-white/12 text-[#c9d1d9] hover:border-[#58a6ff]/45 hover:bg-white/8 hover:text-white')
+                          }
+                          aria-current={active ? 'page' : undefined}
+                        >
+                          {item.label}
+                        </Link>
+                      )
+                    })}
+
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="rounded-xl border border-white/12 px-3.5 py-2.5 text-left text-sm font-semibold text-[#c9d1d9] transition-all hover:border-[#f85149]/55 hover:bg-[#f85149]/15 hover:text-white"
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2">
+                    {guestNavItems.map((item) => {
+                      const active = pathname === '/' && activeGuestSection === item.sectionId
+
+                      return (
+                        <Link
+                          key={item.sectionId}
+                          href={item.href}
+                          onClick={(event) => handleGuestNavClick(event, item.sectionId)}
+                          className={
+                            'rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition-all ' +
+                            (active
+                              ? 'border-[#58a6ff]/50 bg-[#1f6feb]/20 text-white'
+                              : 'border-white/12 text-[#c9d1d9] hover:border-[#58a6ff]/45 hover:bg-white/8 hover:text-white')
+                          }
+                          aria-current={active ? 'page' : undefined}
+                        >
+                          {item.label}
+                        </Link>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeMobileMenu()
+                        openLogin()
+                      }}
+                      className="rounded-xl border border-white/12 px-3.5 py-2.5 text-left text-sm font-semibold text-[#c9d1d9] transition-all hover:border-[#58a6ff]/45 hover:bg-white/8 hover:text-white"
+                    >
+                      Sign in
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeMobileMenu()
+                        openRegister()
+                      }}
+                      className="rounded-xl bg-linear-to-r from-[#1f6feb] to-[#58a6ff] px-3.5 py-2.5 text-left text-sm font-semibold text-white shadow-[0_10px_22px_rgba(31,111,235,0.38)]"
+                    >
+                      Create account
+                    </button>
                   </div>
                 )}
-              </div>
-            ))}
-            
-            <div className="pt-4 border-t border-gray-200 space-y-2">
-              <Button href="/demonstration" variant="primary" size="small" className="w-full">
-                Request a demo
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </header>
+              </motion.div>
+            </motion.nav>
+          ) : null}
+        </AnimatePresence>
+      </div>
+    </motion.header>
   )
 }
-
-export default Header

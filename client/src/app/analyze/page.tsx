@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -226,14 +226,31 @@ export default function AnalyzePage() {
 
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000'
 
-  const token = useMemo(() => {
-    return getAuthToken()
-  }, [])
+  const token = useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof window === 'undefined') return () => {}
+
+      const handleChange = () => onStoreChange()
+      window.addEventListener('storage', handleChange)
+      window.addEventListener('focus', handleChange)
+
+      return () => {
+        window.removeEventListener('storage', handleChange)
+        window.removeEventListener('focus', handleChange)
+      }
+    },
+    () => {
+      if (typeof window === 'undefined') return null
+      return localStorage.getItem('gitguard_token')
+    },
+    () => null,
+  )
 
   useEffect(() => {
-    const currentToken = getAuthToken()
-    if (!currentToken) router.replace('/login')
-  }, [router])
+    if (!token) {
+      router.replace('/login')
+    }
+  }, [router, token])
 
   const totalScore = useMemo(() => clamp(result?.score?.total ?? result?.score?.value ?? 0), [result])
 

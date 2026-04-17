@@ -28,10 +28,10 @@ const HeroBanner: React.FC = () => {
   }
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-linear-to-br from-blue-50 to-white">
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-linear-to-br from-[#070d1a] via-[#0b1220] to-[#111f33]">
       {/* Animated Background */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute inset-0 bg-linear-to-br from-blue-600/10 to-purple-600/10"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(88,166,255,0.22),transparent_44%),radial-gradient(circle_at_76%_18%,rgba(31,111,235,0.16),transparent_38%)]"></div>
       </div>
 
       {/* Content */}
@@ -44,14 +44,14 @@ const HeroBanner: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
           <div className="text-center md:text-left">
             <motion.h1
-              className="text-4xl md:text-6xl font-bold mb-6 leading-tight bg-linear-to-r from-blue-950 via-slate-900 to-black bg-clip-text text-transparent"
+              className="text-4xl md:text-6xl font-bold mb-6 leading-tight bg-linear-to-r from-[#dbeafe] via-[#93c5fd] to-[#60a5fa] bg-clip-text text-transparent"
               variants={itemVariants}
             >
               GITGUARD
             </motion.h1>
 
             <motion.div
-              className="text-lg md:text-xl mb-8 max-w-2xl bg-linear-to-r from-blue-900 via-slate-800 to-black bg-clip-text text-transparent"
+              className="text-lg md:text-xl mb-8 max-w-2xl text-[#c2d4ee]"
               variants={itemVariants}
             >
               GitGuard scans GitHub repositories for malware risk
@@ -98,7 +98,7 @@ const HeroBanner: React.FC = () => {
       </motion.div>
 
       {/* Gradient Overlay */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-linear-to-t from-white to-transparent"></div>
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-linear-to-t from-[#0b1220] to-transparent"></div>
     </section>
   )
 }

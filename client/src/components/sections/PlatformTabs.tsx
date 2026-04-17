@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Shield, Users, GraduationCap, Lock } from 'lucide-react'
+import { Shield, Users, GraduationCap, Lock } from 'lucide-react'
 import Button from '../ui/Button'
 import Image from 'next/image'
 
@@ -17,7 +17,7 @@ const PlatformTabs: React.FC = () => {
       description: 'Parse owner/repo input and collect GitHub metadata for risk context',
       content: 'GitGuard accepts full GitHub URLs or owner/repo shorthand, validates repository identity, and gathers metadata like topics, languages, and README text before scoring.',
       videoSrc: null,
-      imageSrc: '/images/mysikker2.webp',
+      imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
       icon: Shield,
       href: '/platform'
     },
@@ -28,7 +28,7 @@ const PlatformTabs: React.FC = () => {
       description: 'Download zipballs, filter files, and match substring/regex indicators',
       content: 'The pipeline downloads repository archives, extracts source files, skips noisy paths, and scans allowed file types against MongoDB-managed malware keywords with weighted scoring.',
       videoSrc: null,
-      imageSrc: '/images/mysikker2.webp',
+      imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
       icon: Shield,
       href: '/platform'
     },
@@ -39,7 +39,7 @@ const PlatformTabs: React.FC = () => {
       description: 'Generate deterministic outcomes from score, categories, and dataset signals',
       content: 'GitGuard classifies repositories into SAFE, SUSPICIOUS, MALICIOUS, or DANGEROUS DATASET using explicit rules, high-risk category combinations, and confidence checks.',
       videoSrc: null,
-      imageSrc: '/images/mysikker2.webp',
+      imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
       icon: Users,
       href: '/platform'
     },
@@ -50,7 +50,7 @@ const PlatformTabs: React.FC = () => {
       description: 'Reuse previous scan results with hashed Redis keys and TTL controls',
       content: 'Analyze, AI scan, and malware scan responses are cached with configurable TTLs to reduce repeated API calls and improve response time for popular repositories.',
       videoSrc: null,
-      imageSrc: '/images/mysikker2.webp',
+      imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
       icon: GraduationCap,
       href: '/platform'
     },
@@ -61,7 +61,7 @@ const PlatformTabs: React.FC = () => {
       description: 'Protect scanner workflows with register/login and Bearer token middleware',
       content: 'GitGuard backend issues JWT tokens on login and verifies Bearer headers in middleware so only authenticated users can access protected security workflows.',
       videoSrc: null,
-      imageSrc: '/images/mysikker2.webp',
+      imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
       icon: Lock,
       href: '/platform'
     }
@@ -74,7 +74,7 @@ const PlatformTabs: React.FC = () => {
   }
 
   return (
-    <section className="py-16 bg-white">
+    <section className="py-16 bg-linear-to-b from-[#0d172a] via-[#0e1a2e] to-[#0b1424]">
       <div className="container mx-auto px-4">
         {/* Section Title */}
         <motion.div
@@ -85,13 +85,13 @@ const PlatformTabs: React.FC = () => {
           viewport={{ once: true }}
         >
           <div className="inline-flex items-center justify-center mb-8">
-            <div className="h-px bg-gray-300 w-20"></div>
-            <h2 className="px-6 text-2xl font-semibold uppercase tracking-wider text-gray-900">
+            <div className="h-px bg-white/20 w-20"></div>
+            <h2 className="px-6 text-2xl font-semibold uppercase tracking-wider text-[#c7dcf6]">
               Backend capabilities
             </h2>
-            <div className="h-px bg-gray-300 w-20"></div>
+            <div className="h-px bg-white/20 w-20"></div>
           </div>
-          <h3 className="text-3xl md:text-4xl font-bold text-gray-900 max-w-4xl mx-auto">
+          <h3 className="text-3xl md:text-4xl font-bold text-white max-w-4xl mx-auto">
             From repository intake to malware verdict, each stage is explicit and auditable
           </h3>
         </motion.div>
@@ -110,8 +110,8 @@ const PlatformTabs: React.FC = () => {
               onClick={() => setActiveTab(index)}
               className={`px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
                 activeTab === index
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-linear-to-r from-[#1f6feb] to-[#58a6ff] text-white shadow-[0_10px_22px_rgba(31,111,235,0.35)]'
+                  : 'bg-white/8 text-[#c9d1d9] border border-white/10 hover:bg-white/14 hover:text-white'
               }`}
             >
               {tab.title}
@@ -133,15 +133,15 @@ const PlatformTabs: React.FC = () => {
             >
               {/* Left Content */}
               <div className="space-y-6">
-                <div className="text-sm font-semibold text-blue-600 uppercase tracking-wider">
+                <div className="text-sm font-semibold text-[#8db8f6] uppercase tracking-wider">
                   {tabs[activeTab].preTitle}
                 </div>
                 
-                <h3 className="text-2xl font-bold text-gray-900">
+                <h3 className="text-2xl font-bold text-white">
                   {tabs[activeTab].description}
                 </h3>
                 
-                <p className="text-gray-600 leading-relaxed">
+                <p className="text-[#a9c0dd] leading-relaxed">
                   {tabs[activeTab].content}
                 </p>
                 
@@ -156,7 +156,7 @@ const PlatformTabs: React.FC = () => {
 
               {/* Right Content - Video/Image */}
               <div className="relative">
-                <div className="bg-linear-to-br from-blue-100 to-purple-100 rounded-2xl p-8">
+                <div className="rounded-2xl border border-white/10 bg-linear-to-br from-[#11213a] to-[#1a2f4d] p-8 shadow-[0_18px_35px_rgba(3,10,22,0.38)]">
                   {tabs[activeTab].videoSrc ? (
                     <div className="relative rounded-xl overflow-hidden bg-black">
                       <video
@@ -170,7 +170,7 @@ const PlatformTabs: React.FC = () => {
                           target.style.display = 'none';
                           const parent = target.parentElement;
                           if (parent) {
-                            parent.innerHTML = `<div class="w-full h-48 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl flex items-center justify-center text-gray-600">Video Demo</div>`;
+                            parent.innerHTML = `<div class="w-full h-48 bg-linear-to-br from-[#11213a] to-[#1a2f4d] rounded-xl flex items-center justify-center text-[#d3e5fb]">Video Demo</div>`;
                           }
                         }}
                       >
@@ -178,12 +178,6 @@ const PlatformTabs: React.FC = () => {
                         {/* <source src={tabs[activeTab].videoSrc?.replace('.mp4', '.webm')} type="video/webm" /> */}
                       </video>
                       
-                      {/* Play Button Overlay */}
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 hover:opacity-100 transition-opacity">
-                        <div className="bg-white/90 rounded-full p-4">
-                          <Play className="w-8 h-8 text-blue-600" />
-                        </div>
-                      </div>
                     </div>
                   ) : (
                     <div className="rounded-xl overflow-hidden">
@@ -198,7 +192,7 @@ const PlatformTabs: React.FC = () => {
                           target.style.display = 'none';
                           const parent = target.parentElement;
                           if (parent) {
-                            parent.innerHTML = `<div class="w-full h-48 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl flex items-center justify-center text-gray-600">${tabs[activeTab].title}</div>`;
+                            parent.innerHTML = `<div class="w-full h-48 bg-linear-to-br from-[#11213a] to-[#1a2f4d] rounded-xl flex items-center justify-center text-[#d3e5fb]">${tabs[activeTab].title}</div>`;
                           }
                         }}
                       />
