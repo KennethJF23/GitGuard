@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getAuthToken, setAuthSession } from '@/lib/authSession'
+import { getAuthToken, setAuthSession, validateAuthSession } from '@/lib/authSession'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -15,12 +15,16 @@ export default function LoginPage() {
   const [nextPath, setNextPath] = useState('/analyze')
 
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-  const githubClientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || ''
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
+  const githubClientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || process.env.NEXT_PUBLIC_GITHUB_OAUTH_CLIENT_ID || ''
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID || ''
   const redirectUri = useMemo(() => {
     if (typeof window === 'undefined') return ''
+    if (process.env.NEXT_PUBLIC_AUTH_REDIRECT_URI?.trim()) {
+      return process.env.NEXT_PUBLIC_AUTH_REDIRECT_URI.trim()
+    }
     return `${window.location.origin}/login`
   }, [])
+  const validatedApiBase = apiBase
 
   const handleSocialResponse = async (endpoint: string, payload: Record<string, unknown>) => {
     setError('')
@@ -59,12 +63,28 @@ export default function LoginPage() {
 
     const code = params.get('code')
     const state = params.get('state')
+    const providerError = params.get('error')
+    const providerErrorDescription = params.get('error_description')
     const emailFromQuery = params.get('email')
     const passwordFromQuery = params.get('password')
 
-    const currentToken = getAuthToken()
-    if (currentToken) {
-      router.replace('/analyze')
+    const checkSession = async () => {
+      const currentToken = getAuthToken()
+      if (!currentToken) return
+
+      const valid = await validateAuthSession(validatedApiBase)
+      if (valid) {
+        router.replace('/analyze')
+      }
+    }
+    checkSession()
+
+    if (providerError) {
+      const providerMessage = providerErrorDescription
+        ? decodeURIComponent(providerErrorDescription.replace(/\+/g, ' '))
+        : providerError
+      setError(`OAuth sign-in failed: ${providerMessage}`)
+      window.history.replaceState({}, document.title, '/login')
       return
     }
 
@@ -83,12 +103,23 @@ export default function LoginPage() {
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
     const accessToken = hashParams.get('access_token')
     const tokenState = hashParams.get('state')
+    const hashError = hashParams.get('error')
+    const hashErrorDescription = hashParams.get('error_description')
+    if (hashError) {
+      const providerMessage = hashErrorDescription
+        ? decodeURIComponent(hashErrorDescription.replace(/\+/g, ' '))
+        : hashError
+      setError(`OAuth sign-in failed: ${providerMessage}`)
+      window.history.replaceState({}, document.title, '/login')
+      return
+    }
+
     if (accessToken && tokenState === 'google') {
       handleSocialResponse('/api/auth/google', { access_token: accessToken })
       window.history.replaceState({}, document.title, '/login')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [redirectUri, router])
+  }, [redirectUri, router, validatedApiBase])
 
   const startGithubSignIn = () => {
     if (!githubClientId) {
@@ -117,6 +148,7 @@ export default function LoginPage() {
     authUrl.searchParams.set('scope', 'openid email profile')
     authUrl.searchParams.set('state', 'google')
     authUrl.searchParams.set('prompt', 'select_account')
+    authUrl.searchParams.set('include_granted_scopes', 'true')
     window.location.href = authUrl.toString()
   }
 
@@ -189,7 +221,7 @@ export default function LoginPage() {
               </Link>
             </p>
 
-            <form className="mt-8 space-y-5" method="post" action="/login" onSubmit={handleSubmit}>
+            <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
               <div>
                 <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-800">
                   Email address

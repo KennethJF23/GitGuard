@@ -31,9 +31,37 @@ function getCookieValue(name: string): string | null {
   return null
 }
 
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length < 2) return null
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
+    const decoded = atob(padded)
+    return JSON.parse(decoded) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+function isTokenExpired(token: string): boolean {
+  const payload = decodeJwtPayload(token)
+  const exp = payload?.exp
+  if (typeof exp !== 'number' || !Number.isFinite(exp)) return false
+  return Date.now() >= exp * 1000
+}
+
 export function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem(AUTH_TOKEN_KEY) || getCookieValue(AUTH_COOKIE_NAME)
+  const token = localStorage.getItem(AUTH_TOKEN_KEY) || getCookieValue(AUTH_COOKIE_NAME)
+  if (!token) return null
+
+  if (isTokenExpired(token)) {
+    clearAuthSession()
+    return null
+  }
+
+  return token
 }
 
 export function setAuthSession(data: AuthPayload): void {
@@ -56,4 +84,27 @@ export function clearAuthSession(): void {
   localStorage.removeItem(AUTH_TOKEN_KEY)
   localStorage.removeItem(AUTH_USER_KEY)
   document.cookie = `${encodeURIComponent(AUTH_COOKIE_NAME)}=; Path=/; Max-Age=0; SameSite=Lax`
+}
+
+export async function validateAuthSession(apiBase: string): Promise<boolean> {
+  const token = getAuthToken()
+  if (!token) return false
+
+  try {
+    const response = await fetch(`${apiBase}/api/auth/me`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      clearAuthSession()
+      return false
+    }
+
+    return true
+  } catch {
+    return false
+  }
 }

@@ -113,3 +113,25 @@ exports.login = async (req,res) => {
         });
     }
 };
+
+exports.me = async (req, res) => {
+    try {
+        const userId = req.user;
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        const user = await User.findById(userId).select("_id username email").lean();
+        if (!user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        return res.json({
+            id: user._id,
+            username: user.username,
+            email: user.email,
+        });
+    } catch {
+        return res.status(500).json({ message: "Unable to verify session" });
+    }
+};
