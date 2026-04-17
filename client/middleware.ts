@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_ROUTES = ['/login', '/signup']
+const AUTH_PAGES = ['/login', '/signup']
+const PUBLIC_ROUTES = ['/', ...AUTH_PAGES]
 
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))
+}
+
+function isAuthPage(pathname: string): boolean {
+  return AUTH_PAGES.some((route) => pathname === route || pathname.startsWith(`${route}/`))
 }
 
 export function middleware(request: NextRequest) {
@@ -16,6 +21,7 @@ export function middleware(request: NextRequest) {
 
   const token = request.cookies.get('gitguard_token')?.value
   const publicRoute = isPublicRoute(pathname)
+  const authPage = isAuthPage(pathname)
 
   if (!token && !publicRoute) {
     const loginUrl = new URL('/login', request.url)
@@ -23,7 +29,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  if (token && publicRoute) {
+  if (token && authPage) {
     return NextResponse.redirect(new URL('/analyze', request.url))
   }
 

@@ -1,16 +1,14 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { motion } from 'framer-motion'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import Button from '@/components/ui/Button'
-import { motion } from 'framer-motion'
+import { clearAuthSession, getAuthToken } from '@/lib/authSession'
 
-type ProgressMetric = {
-  label: string
-  value: string
-  progress: number
-}
+type DashboardMode = 'human' | 'ai' | 'malware'
 
 type DistributionMetric = {
   label: string
@@ -18,140 +16,470 @@ type DistributionMetric = {
   barClassName?: string
 }
 
+type ProgressMetric = {
+  label: string
+  progress: number
+  value: string
+}
+
 type RepoMetric = {
   label: string
   value: string
 }
 
-type StatusCard = {
-  title: string
-  value: string
-  description: string
-  toneClassName?: string
-}
-
-type RepoInfo = {
-  name: string
-  description: string
-  metrics: RepoMetric[]
+type DashboardResult = {
+  score: number
+  scoreText: string
+  scoreCaption: string
+  statusTitle: string
+  statusValue: string
+  statusDescription: string
+  repoName: string
+  repoDescription: string
+  repoMetrics: RepoMetric[]
+  distributionMetrics: DistributionMetric[]
+  progressMetrics: ProgressMetric[]
+  summaryText: string
+  roadmapItems: string[]
+  rawOutput: Record<string, unknown>
 }
 
 type AnalysisDashboardConfig = {
-  theme?: 'light' | 'dark'
-  hideHeader?: boolean
+  mode: DashboardMode
   sectionLabel: string
   title: string
   subtitle: string
   buttonLabel: string
   loadingLabel: string
-  scoreCardTitle: string
-  scoreValue: string
-  scoreCaption: string
-  repoInfo: RepoInfo
-  distributionTitle: string
-  distributionMetrics: DistributionMetric[]
-  metricsTitle: string
-  progressMetrics: ProgressMetric[]
-  summaryTitle: string
-  summaryText: string
-  roadmapTitle?: string
-  roadmapItems?: string[]
-  statusCard?: StatusCard
-  rawOutputTitle: string
-  rawOutput: Record<string, unknown>
 }
 
 type AnalysisDashboardPageProps = {
   config: AnalysisDashboardConfig
 }
 
+type GenericResponse = Record<string, unknown>
+
+type MalwareMatch = {
+  category?: string
+  matchedField?: string
+  pattern?: string
+  weight?: number
+}
+
+function safeNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function clamp(value: number, min = 0, max = 100): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function toTitle(value: string): string {
+  return value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (m) => m.toUpperCase())
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(clamp(value))}%`
+}
+
+function extractRoadmapFromText(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^[-*]\s+|^\d+[.)]\s+/.test(line))
+    .map((line) => line.replace(/^[-*]\s+/, '').replace(/^\d+[.)]\s+/, '').trim())
+    .filter(Boolean)
+    .slice(0, 6)
+}
+
+function computeAiScore(snapshot: GenericResponse | undefined): number {
+  const readme = (snapshot?.readme as GenericResponse | undefined) || {}
+  const tooling = (snapshot?.tooling as GenericResponse | undefined) || {}
+
+  const score =
+    (readme.present ? 16 : 0) +
+    (readme.hasInstall ? 10 : 0) +
+    (readme.hasUsage ? 10 : 0) +
+    (readme.hasBadges ? 6 : 0) +
+    (readme.hasScreenshots ? 6 : 0) +
+    (tooling.hasGitHubActions ? 14 : 0) +
+    (tooling.hasDependabot ? 12 : 0) +
+    (tooling.hasTestsDir ? 12 : 0) +
+    (tooling.hasEslint ? 7 : 0) +
+    (tooling.hasPrettier ? 7 : 0)
+
+  return clamp(score)
+}
+
+function buildHumanResult(payload: GenericResponse): DashboardResult {
+  const repo = (payload.repo as GenericResponse | undefined) || {}
+  const scoreObj = (payload.score as GenericResponse | undefined) || {}
+  const snapshot = (payload.snapshot as GenericResponse | undefined) || {}
+  const git = (snapshot.git as GenericResponse | undefined) || {}
+  const readme = (snapshot.readme as GenericResponse | undefined) || {}
+
+  const score = clamp(safeNumber(scoreObj.total, safeNumber(scoreObj.value, 0)))
+  const breakdown = Array.isArray(scoreObj.breakdown) ? scoreObj.breakdown : []
+  const distributionMetrics: DistributionMetric[] = breakdown
+    .map((item) => {
+      const row = (item as GenericResponse) || {}
+      const max = Math.max(1, safeNumber(row.max, 1))
+      const raw = safeNumber(row.score, 0)
+      return {
+        label: String(row.label || row.key || 'Signal'),
+        value: clamp((raw / max) * 100),
+      }
+    })
+    .slice(0, 6)
+
+  const commitsLast90 = safeNumber(git.commitsLast90Days, 0)
+  const activeDays = safeNumber(git.activeCommitDaysLast90Days, 0)
+  const conventionalRate = safeNumber(git.conventionalCommitRate, 0)
+
+  const progressMetrics: ProgressMetric[] = [
+    {
+      label: 'Commit Activity (90d)',
+      progress: clamp((commitsLast90 / 90) * 100),
+      value: String(commitsLast90),
+    },
+    {
+      label: 'Active Commit Days',
+      progress: clamp((activeDays / 90) * 100),
+      value: `${activeDays} / 90`,
+    },
+    {
+      label: 'Conventional Commit Rate',
+      progress: clamp(conventionalRate * 100),
+      value: formatPercent(conventionalRate * 100),
+    },
+    {
+      label: 'README Completeness',
+      progress: clamp(
+        (readme.present ? 40 : 0) + (readme.hasInstall ? 20 : 0) + (readme.hasUsage ? 20 : 0) + (readme.hasBadges ? 10 : 0) + (readme.hasScreenshots ? 10 : 0),
+      ),
+      value: readme.present ? 'Present' : 'Missing',
+    },
+  ]
+
+  return {
+    score,
+    scoreText: `${Math.round(score)} / 100`,
+    scoreCaption: String(payload.summary || 'Repository health analysis completed.'),
+    statusTitle: 'Risk Card',
+    statusValue: String(scoreObj.level || scoreObj.band || 'UNKNOWN').toUpperCase(),
+    statusDescription: String(payload.summary || 'No summary generated by backend.'),
+    repoName: String(repo.fullName || 'Unknown repository'),
+    repoDescription: String(repo.description || 'No repository description returned.'),
+    repoMetrics: [
+      { label: 'Stars', value: String(safeNumber(repo.stars, 0)) },
+      { label: 'Forks', value: String(safeNumber(repo.forks, 0)) },
+      { label: 'Open Issues', value: String(safeNumber(repo.openIssues, 0)) },
+      { label: 'Commits (90d)', value: String(commitsLast90) },
+    ],
+    distributionMetrics,
+    progressMetrics,
+    summaryText: String(payload.summary || 'No summary available.'),
+    roadmapItems: Array.isArray(payload.roadmap) ? payload.roadmap.map((v) => String(v)).filter(Boolean).slice(0, 6) : [],
+    rawOutput: payload,
+  }
+}
+
+function buildAiResult(payload: GenericResponse): DashboardResult {
+  const repo = (payload.repo as GenericResponse | undefined) || {}
+  const snapshot = (payload.snapshot as GenericResponse | undefined) || {}
+  const readme = (snapshot.readme as GenericResponse | undefined) || {}
+  const tooling = (snapshot.tooling as GenericResponse | undefined) || {}
+  const ai = (payload.ai as GenericResponse | undefined) || {}
+
+  const aiOutput = String(ai.output || '').trim()
+  const score = computeAiScore(snapshot)
+
+  const languages = Array.isArray(snapshot.languagesTop) ? snapshot.languagesTop : []
+  const distributionMetrics: DistributionMetric[] = languages
+    .map((row) => {
+      const item = (row as GenericResponse) || {}
+      return {
+        label: String(item.name || 'Other'),
+        value: clamp(safeNumber(item.percent, 0)),
+      }
+    })
+    .slice(0, 6)
+
+  const progressMetrics: ProgressMetric[] = [
+    {
+      label: 'README Coverage',
+      progress: clamp((readme.present ? 40 : 0) + (readme.hasInstall ? 20 : 0) + (readme.hasUsage ? 20 : 0) + (readme.hasBadges ? 10 : 0) + (readme.hasScreenshots ? 10 : 0)),
+      value: readme.present ? 'Present' : 'Missing',
+    },
+    {
+      label: 'Tooling Readiness',
+      progress: clamp((tooling.hasGitHubActions ? 25 : 0) + (tooling.hasDependabot ? 25 : 0) + (tooling.hasTestsDir ? 25 : 0) + (tooling.hasEslint || tooling.hasPrettier ? 25 : 0)),
+      value: 'Derived from repo tooling',
+    },
+    {
+      label: 'CI Security Signal',
+      progress: clamp((tooling.hasSecurityPolicy ? 50 : 0) + (tooling.hasDependabot ? 25 : 0) + (tooling.hasGitHubActions ? 25 : 0)),
+      value: 'Policy + automation',
+    },
+    {
+      label: 'Documentation Quality',
+      progress: clamp(safeNumber(readme.wordCount, 0) / 10),
+      value: `${safeNumber(readme.wordCount, 0)} words`,
+    },
+  ]
+
+  const summaryText = aiOutput || 'AI scan completed. No narrative text returned by backend model output.'
+  const roadmapItems = extractRoadmapFromText(aiOutput)
+
+  return {
+    score,
+    scoreText: `${Math.round(score)} / 100`,
+    scoreCaption: 'Computed from README and tooling metadata returned by the backend AI scan.',
+    statusTitle: 'AI Model Status',
+    statusValue: score >= 75 ? 'HIGH READINESS' : score >= 45 ? 'MODERATE READINESS' : 'LOW READINESS',
+    statusDescription: `Model: ${String(ai.model || 'N/A')}`,
+    repoName: String(repo.fullName || 'Unknown repository'),
+    repoDescription: String(repo.description || 'No repository description returned.'),
+    repoMetrics: [
+      { label: 'Stars', value: String(safeNumber(repo.stars, 0)) },
+      { label: 'Forks', value: String(safeNumber(repo.forks, 0)) },
+      { label: 'Open Issues', value: String(safeNumber(repo.openIssues, 0)) },
+      { label: 'License', value: String(repo.license || 'N/A') },
+    ],
+    distributionMetrics,
+    progressMetrics,
+    summaryText,
+    roadmapItems,
+    rawOutput: payload,
+  }
+}
+
+function buildMalwareResult(payload: GenericResponse): DashboardResult {
+  const scoreRaw = safeNumber(payload.score, 0)
+  const score = clamp((scoreRaw / 25) * 100)
+  const verdict = String(payload.verdict || 'SAFE').toUpperCase()
+  const ai = ((payload.ai as GenericResponse | undefined)?.parsed as GenericResponse | undefined) || {}
+  const matches = Array.isArray(payload.matches) ? (payload.matches as MalwareMatch[]) : []
+
+  const categories = new Map<string, { indicators: number; weighted: number }>()
+  for (const match of matches) {
+    const category = String(match.category || 'generic').trim().toLowerCase() || 'generic'
+    const current = categories.get(category) || { indicators: 0, weighted: 0 }
+    current.indicators += 1
+    current.weighted += safeNumber(match.weight, 0)
+    categories.set(category, current)
+  }
+
+  const distributionMetrics: DistributionMetric[] = Array.from(categories.entries())
+    .sort((a, b) => b[1].indicators - a[1].indicators)
+    .slice(0, 6)
+    .map(([category, values]) => ({
+      label: toTitle(category),
+      value: clamp((values.indicators / Math.max(1, matches.length)) * 100),
+    }))
+
+  const byField = { name: 0, path: 0, content: 0 }
+  for (const match of matches) {
+    if (match.matchedField === 'name') byField.name += 1
+    else if (match.matchedField === 'path') byField.path += 1
+    else byField.content += 1
+  }
+
+  const totalMatchCount = Math.max(1, matches.length)
+  const progressMetrics: ProgressMetric[] = [
+    {
+      label: 'Name-based Indicators',
+      progress: clamp((byField.name / totalMatchCount) * 100),
+      value: String(byField.name),
+    },
+    {
+      label: 'Path-based Indicators',
+      progress: clamp((byField.path / totalMatchCount) * 100),
+      value: String(byField.path),
+    },
+    {
+      label: 'Content-based Indicators',
+      progress: clamp((byField.content / totalMatchCount) * 100),
+      value: String(byField.content),
+    },
+    {
+      label: 'AI Confidence',
+      progress: clamp(safeNumber(ai.confidence, 0) * 100),
+      value: formatPercent(safeNumber(ai.confidence, 0) * 100),
+    },
+  ]
+
+  const confidence = safeNumber(ai.confidence, 0) * 100
+  const summaryText =
+    String(ai.reasoning || '').trim() ||
+    `Backend malware scan identified ${safeNumber(payload.matchCount, 0)} signals with verdict ${verdict}.`
+
+  const aiIndicators = Array.isArray(ai.indicators)
+    ? ai.indicators.map((v) => String(v).trim()).filter(Boolean)
+    : []
+  const topCategoryNames = Array.from(categories.entries())
+    .sort((a, b) => b[1].indicators - a[1].indicators)
+    .slice(0, 3)
+    .map(([name]) => toTitle(name))
+
+  const roadmapItems = [
+    ...aiIndicators.map((item) => `Investigate indicator: ${item}`),
+    ...topCategoryNames.map((name) => `Prioritize review for ${name} findings`),
+  ].slice(0, 6)
+
+  return {
+    score,
+    scoreText: `${Math.round(score)} / 100`,
+    scoreCaption: `Normalized from pipeline score ${scoreRaw.toFixed(2)} returned by backend malware scan.`,
+    statusTitle: 'Verdict Card',
+    statusValue: verdict,
+    statusDescription: `AI confidence ${formatPercent(confidence)}`,
+    repoName: String((payload.input as GenericResponse | undefined)?.url || 'Scanned repository'),
+    repoDescription: `Pipeline score ${scoreRaw.toFixed(2)} with ${safeNumber(payload.matchCount, 0)} total matched indicators.`,
+    repoMetrics: [
+      { label: 'Indicators', value: String(safeNumber(payload.matchCount, 0)) },
+      { label: 'Unique Patterns', value: String(new Set(matches.map((m) => m.pattern).filter(Boolean)).size) },
+      { label: 'Verdict', value: verdict },
+      { label: 'Confidence', value: formatPercent(confidence) },
+    ],
+    distributionMetrics,
+    progressMetrics,
+    summaryText,
+    roadmapItems,
+    rawOutput: payload,
+  }
+}
+
+function buildResult(mode: DashboardMode, payload: GenericResponse): DashboardResult {
+  if (mode === 'human') return buildHumanResult(payload)
+  if (mode === 'ai') return buildAiResult(payload)
+  return buildMalwareResult(payload)
+}
+
+function endpointForMode(mode: DashboardMode): string {
+  if (mode === 'human') return '/api/repo/analyze'
+  if (mode === 'ai') return '/api/repo/ai-scan'
+  return '/api/repo/malware-pipeline-scan'
+}
+
 const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config }) => {
+  const router = useRouter()
   const [repoUrl, setRepoUrl] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [hasResults, setHasResults] = useState(false)
-  const isDark = config.theme === 'dark'
+  const [error, setError] = useState('')
+  const [result, setResult] = useState<DashboardResult | null>(null)
 
-  const normalizedDistributionMetrics = config.distributionMetrics.map((item) => ({
+  const isDark = true
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000'
+
+  const normalizedDistributionMetrics = (result?.distributionMetrics || []).map((item) => ({
     ...item,
-    value: Math.min(Math.max(item.value, 0), 100),
-  }))
-  const normalizedProgressMetrics = config.progressMetrics.map((item) => ({
-    ...item,
-    progress: Math.min(Math.max(item.progress, 0), 100),
+    value: clamp(item.value),
   }))
 
-  const licenseMetric = config.repoInfo.metrics.find((metric) => /license/i.test(metric.label))
+  const normalizedProgressMetrics = (result?.progressMetrics || []).map((item) => ({
+    ...item,
+    progress: clamp(item.progress),
+  }))
+
+  const licenseMetric = result?.repoMetrics.find((metric) => /license/i.test(metric.label))
   const hasLicense = licenseMetric
     ? !/none|missing|unknown|n\/a|no/i.test(String(licenseMetric.value || '').toLowerCase())
     : false
+
   const averageReadiness =
     normalizedProgressMetrics.length > 0
-      ? Math.round(
-          normalizedProgressMetrics.reduce((sum, metric) => sum + metric.progress, 0) /
-            normalizedProgressMetrics.length,
-        )
+      ? Math.round(normalizedProgressMetrics.reduce((sum, metric) => sum + metric.progress, 0) / normalizedProgressMetrics.length)
       : 0
+
   const strongestSignal =
     normalizedDistributionMetrics.length > 0
       ? [...normalizedDistributionMetrics].sort((a, b) => b.value - a.value)[0]
       : null
 
-  const lineChartPoints = normalizedProgressMetrics
-    .map((metric, index) => {
-      const x = normalizedProgressMetrics.length > 1 ? (index / (normalizedProgressMetrics.length - 1)) * 100 : 50
-      const y = 100 - metric.progress
-      return `${x},${y}`
-    })
-    .join(' ')
+  const prettyRawOutput = useMemo(
+    () => (result ? JSON.stringify(result.rawOutput, null, 2) : ''),
+    [result],
+  )
 
-  const prettyRawOutput = useMemo(() => JSON.stringify(config.rawOutput, null, 2), [config.rawOutput])
-  const currentRepoUrl = repoUrl.trim()
-  const displayedRepoName = currentRepoUrl || config.repoInfo.name
-  const displayedRepoDescription = currentRepoUrl
-    ? `Analysis generated for: ${currentRepoUrl}`
-    : config.repoInfo.description
-  const resultCardClass = isDark
-    ? 'rounded-2xl border border-white/10 bg-white/5 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-cyan-300/40 hover:shadow-[0_0_0_1px_rgba(125,211,252,0.28),0_0_24px_rgba(56,189,248,0.22),0_16px_30px_rgba(2,6,23,0.55)]'
-    : 'rounded-2xl border border-gray-100 bg-white shadow-xl'
-  const resultPanelClass = isDark
-    ? 'space-y-6 rounded-3xl border border-white/10 bg-linear-to-b from-white/[0.05] via-white/[0.025] to-transparent p-4 md:p-6 backdrop-blur-sm'
-    : 'space-y-6'
+  const resultCardClass =
+    'rounded-2xl border border-white/10 bg-white/5 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-cyan-300/40 hover:shadow-[0_0_0_1px_rgba(125,211,252,0.28),0_0_24px_rgba(56,189,248,0.22),0_16px_30px_rgba(2,6,23,0.55)]'
 
-  const handleAnalyze = () => {
+  const resultPanelClass =
+    'space-y-6 rounded-3xl border border-white/10 bg-linear-to-b from-white/[0.05] via-white/[0.025] to-transparent p-4 md:p-6 backdrop-blur-sm'
+
+  const handleAnalyze = async () => {
     if (!repoUrl.trim()) {
+      setError('Please provide a GitHub repository URL.')
       return
     }
 
-    setIsLoading(true)
-    setHasResults(false)
+    const token = getAuthToken()
+    if (!token) {
+      router.replace('/login')
+      return
+    }
 
-    window.setTimeout(() => {
+    setError('')
+    setIsLoading(true)
+    setResult(null)
+
+    try {
+      const response = await fetch(`${apiBase}${endpointForMode(config.mode)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ url: repoUrl.trim() }),
+      })
+
+      const payload = (await response.json().catch(() => ({}))) as GenericResponse
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          clearAuthSession()
+          router.replace('/login')
+          return
+        }
+
+        setError(String(payload.message || 'Unable to run analysis.'))
+        return
+      }
+
+      setResult(buildResult(config.mode, payload))
+    } catch {
+      setError('Unable to reach backend service. Ensure server is running.')
+    } finally {
       setIsLoading(false)
-      setHasResults(true)
-    }, 1200)
+    }
   }
 
   return (
     <div className={isDark ? 'min-h-screen bg-linear-to-br from-blue-950 via-slate-950 to-black text-white' : 'min-h-screen bg-white'}>
-      {!config.hideHeader && <Header />}
+      <Header />
 
       <main className={isDark ? 'py-16' : 'py-16 bg-linear-to-b from-white to-gray-50'}>
         <section className="container mx-auto px-4">
-          <div className="max-w-6xl mx-auto space-y-8">
+          <div className="mx-auto max-w-6xl space-y-8">
             <div className="text-center">
-              <div className="inline-flex items-center justify-center mb-6">
-                <div className={isDark ? 'h-px bg-white/20 w-20' : 'h-px bg-gray-300 w-20'}></div>
+              <div className="mb-6 inline-flex items-center justify-center">
+                <div className={isDark ? 'h-px w-20 bg-white/20' : 'h-px w-20 bg-gray-300'}></div>
                 <h1 className={isDark ? 'px-6 text-2xl font-semibold uppercase tracking-wider text-blue-200' : 'px-6 text-2xl font-semibold uppercase tracking-wider text-gray-900'}>
                   {config.sectionLabel}
                 </h1>
-                <div className={isDark ? 'h-px bg-white/20 w-20' : 'h-px bg-gray-300 w-20'}></div>
+                <div className={isDark ? 'h-px w-20 bg-white/20' : 'h-px w-20 bg-gray-300'}></div>
               </div>
-              <h2 className={isDark ? 'text-3xl md:text-4xl font-bold text-white mb-4' : 'text-3xl md:text-4xl font-bold text-gray-900 mb-4'}>{config.title}</h2>
-              <p className={isDark ? 'text-lg text-blue-100 max-w-3xl mx-auto' : 'text-lg text-gray-600 max-w-3xl mx-auto'}>{config.subtitle}</p>
+              <h2 className={isDark ? 'mb-4 text-3xl font-bold text-white md:text-4xl' : 'mb-4 text-3xl font-bold text-gray-900 md:text-4xl'}>{config.title}</h2>
+              <p className={isDark ? 'mx-auto max-w-3xl text-lg text-blue-100' : 'mx-auto max-w-3xl text-lg text-gray-600'}>{config.subtitle}</p>
             </div>
 
-            <div className={isDark ? 'bg-white/5 rounded-2xl shadow-xl p-6 md:p-8 border border-white/10 backdrop-blur-md' : 'bg-white rounded-2xl shadow-xl p-6 md:p-8 border border-gray-100'}>
-              <div className="flex flex-col md:flex-row gap-4">
+            <div className={isDark ? 'rounded-2xl border border-white/10 bg-white/5 p-6 shadow-xl backdrop-blur-md md:p-8' : 'rounded-2xl border border-gray-100 bg-white p-6 shadow-xl md:p-8'}>
+              <div className="flex flex-col gap-4 md:flex-row">
                 <input
                   type="url"
                   value={repoUrl}
@@ -162,24 +490,25 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                     }
                   }}
                   placeholder="https://github.com/owner/repository"
-                  className={isDark ? 'flex-1 rounded-lg border border-white/20 bg-black/30 px-4 py-3 text-white placeholder:text-blue-200/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400' : 'flex-1 rounded-lg border border-gray-300 px-4 py-3 text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600'}
+                  className={isDark ? 'flex-1 rounded-lg border border-white/20 bg-black/30 px-4 py-3 text-white placeholder:text-blue-200/70 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40' : 'flex-1 rounded-lg border border-gray-300 px-4 py-3 text-gray-700 placeholder:text-gray-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600'}
                 />
-                <Button onClick={handleAnalyze} className="md:w-auto w-full" disabled={isLoading || !repoUrl.trim()}>
+                <Button onClick={handleAnalyze} className="w-full md:w-auto" disabled={isLoading || !repoUrl.trim()}>
                   {config.buttonLabel}
                 </Button>
               </div>
+              {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
             </div>
 
             {isLoading && (
-              <div className={isDark ? 'bg-white/5 rounded-2xl shadow-xl p-10 border border-white/10 flex items-center justify-center' : 'bg-white rounded-2xl shadow-xl p-10 border border-gray-100 flex items-center justify-center'}>
+              <div className={isDark ? 'flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-10 shadow-xl' : 'flex items-center justify-center rounded-2xl border border-gray-100 bg-white p-10 shadow-xl'}>
                 <div className={isDark ? 'flex items-center gap-4 text-blue-100' : 'flex items-center gap-4 text-gray-700'}>
-                  <div className="h-8 w-8 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin"></div>
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600"></div>
                   <span className="text-lg font-medium">{config.loadingLabel}</span>
                 </div>
               </div>
             )}
 
-            {hasResults && (
+            {result && (
               <motion.div
                 className={resultPanelClass}
                 initial={{ opacity: 0, y: 16 }}
@@ -187,72 +516,47 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                 transition={{ duration: 0.45 }}
               >
                 <div className={isDark ? 'rounded-xl border border-cyan-300/20 bg-linear-to-r from-cyan-400/10 via-blue-400/5 to-transparent px-4 py-3 text-xs uppercase tracking-wider text-cyan-100' : 'rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs uppercase tracking-wider text-blue-700'}>
-                  Analysis complete. Hover cards to inspect signals and metrics.
+                  Analysis complete. All values below are from backend response.
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <motion.article
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.35 }}
-                    className={`${resultCardClass} p-6`}
-                  >
-                    <h3 className={isDark ? 'text-sm font-semibold uppercase tracking-wide text-blue-200 mb-3' : 'text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3'}>
-                      {config.scoreCardTitle}
-                    </h3>
-                    <div className="text-4xl font-bold text-blue-600 mb-2">{config.scoreValue}</div>
-                    <p className={isDark ? 'text-sm text-blue-100' : 'text-sm text-gray-600'}>{config.scoreCaption}</p>
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                  <motion.article initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className={`${resultCardClass} p-6`}>
+                    <h3 className={isDark ? 'mb-3 text-sm font-semibold uppercase tracking-wide text-blue-200' : 'mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500'}>Overall Score</h3>
+                    <div className="mb-2 text-4xl font-bold text-blue-600">{result.scoreText}</div>
+                    <p className={isDark ? 'text-sm text-blue-100' : 'text-sm text-gray-600'}>{result.scoreCaption}</p>
                   </motion.article>
 
-                  {config.statusCard && (
-                    <motion.article
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.35, delay: 0.06 }}
-                      className={`${resultCardClass} p-6`}
-                    >
-                      <h3 className={isDark ? 'text-sm font-semibold uppercase tracking-wide text-blue-200 mb-3' : 'text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3'}>
-                        {config.statusCard.title}
-                      </h3>
-                      <div className={`text-2xl font-bold mb-2 ${config.statusCard.toneClassName ?? 'text-gray-900'}`}>
-                        {config.statusCard.value}
-                      </div>
-                      <p className={isDark ? 'text-sm text-blue-100' : 'text-sm text-gray-600'}>{config.statusCard.description}</p>
-                    </motion.article>
-                  )}
+                  <motion.article initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.06 }} className={`${resultCardClass} p-6`}>
+                    <h3 className={isDark ? 'mb-3 text-sm font-semibold uppercase tracking-wide text-blue-200' : 'mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500'}>{result.statusTitle}</h3>
+                    <div className="mb-2 text-2xl font-bold text-cyan-300">{result.statusValue}</div>
+                    <p className={isDark ? 'text-sm text-blue-100' : 'text-sm text-gray-600'}>{result.statusDescription}</p>
+                  </motion.article>
 
-                  <motion.article
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.35, delay: 0.12 }}
-                    className={`${resultCardClass} p-6 ${config.statusCard ? '' : 'lg:col-span-2'}`}
-                  >
-                    <h3 className={isDark ? 'text-sm font-semibold uppercase tracking-wide text-blue-200 mb-4' : 'text-sm font-semibold uppercase tracking-wide text-gray-500 mb-4'}>
-                      Repository Info
-                    </h3>
+                  <motion.article initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.12 }} className={`${resultCardClass} p-6`}>
+                    <h3 className={isDark ? 'mb-4 text-sm font-semibold uppercase tracking-wide text-blue-200' : 'mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500'}>Repository Info</h3>
                     <div className="mb-4">
-                      <p className={isDark ? 'text-lg font-semibold text-white break-all' : 'text-lg font-semibold text-gray-900 break-all'}>{displayedRepoName}</p>
-                      <p className={isDark ? 'text-sm text-blue-100 mt-1 break-all' : 'text-sm text-gray-600 mt-1 break-all'}>{displayedRepoDescription}</p>
+                      <p className={isDark ? 'break-all text-lg font-semibold text-white' : 'break-all text-lg font-semibold text-gray-900'}>{result.repoName}</p>
+                      <p className={isDark ? 'mt-1 break-all text-sm text-blue-100' : 'mt-1 break-all text-sm text-gray-600'}>{result.repoDescription}</p>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {config.repoInfo.metrics.map((metric) => (
-                        <div key={metric.label} className={isDark ? 'bg-black/20 rounded-lg p-3 border border-white/10' : 'bg-gray-50 rounded-lg p-3 border border-gray-100'}>
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                      {result.repoMetrics.map((metric) => (
+                        <div key={metric.label} className={isDark ? 'rounded-lg border border-white/10 bg-black/20 p-3' : 'rounded-lg border border-gray-100 bg-gray-50 p-3'}>
                           <p className={isDark ? 'text-xs uppercase tracking-wide text-blue-200' : 'text-xs uppercase tracking-wide text-gray-500'}>{metric.label}</p>
-                          <p className={isDark ? 'text-sm font-semibold text-white mt-1' : 'text-sm font-semibold text-gray-900 mt-1'}>{metric.value}</p>
+                          <p className={isDark ? 'mt-1 text-sm font-semibold text-white' : 'mt-1 text-sm font-semibold text-gray-900'}>{metric.value}</p>
                         </div>
                       ))}
                     </div>
                   </motion.article>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                   <article className={`${resultCardClass} p-5`}>
                     <p className={isDark ? 'text-xs uppercase tracking-wide text-blue-200' : 'text-xs uppercase tracking-wide text-gray-500'}>License Status</p>
                     <p className={isDark ? `mt-2 text-2xl font-bold ${hasLicense ? 'text-emerald-300' : 'text-red-300'}` : `mt-2 text-2xl font-bold ${hasLicense ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {hasLicense ? 'HAS LICENSE' : 'NO LICENSE'}
+                      {hasLicense ? 'HAS LICENSE' : 'UNKNOWN'}
                     </p>
                     <p className={isDark ? 'mt-2 text-sm text-blue-100' : 'mt-2 text-sm text-gray-600'}>
-                      {licenseMetric ? `Detected: ${licenseMetric.value}` : 'No license field was found in repository metrics.'}
+                      {licenseMetric ? `Detected: ${licenseMetric.value}` : 'License value not available in backend response.'}
                     </p>
                   </article>
 
@@ -260,7 +564,7 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                     <p className={isDark ? 'text-xs uppercase tracking-wide text-blue-200' : 'text-xs uppercase tracking-wide text-gray-500'}>Average Metric Score</p>
                     <p className="mt-2 text-2xl font-bold text-blue-400">{averageReadiness}%</p>
                     <p className={isDark ? 'mt-2 text-sm text-blue-100' : 'mt-2 text-sm text-gray-600'}>
-                      Mean score across readiness metrics in this AI analysis.
+                      Mean score across progress metrics derived from backend data.
                     </p>
                   </article>
 
@@ -268,26 +572,23 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                     <p className={isDark ? 'text-xs uppercase tracking-wide text-blue-200' : 'text-xs uppercase tracking-wide text-gray-500'}>Strongest Signal</p>
                     <p className="mt-2 text-2xl font-bold text-blue-400">{strongestSignal ? strongestSignal.label : 'N/A'}</p>
                     <p className={isDark ? 'mt-2 text-sm text-blue-100' : 'mt-2 text-sm text-gray-600'}>
-                      {strongestSignal ? `${strongestSignal.value}% contribution in distribution analysis.` : 'No distribution metrics available.'}
+                      {strongestSignal ? `${Math.round(strongestSignal.value)}% contribution` : 'No distribution metrics available.'}
                     </p>
                   </article>
                 </div>
 
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                   <article className={`${resultCardClass} p-6`}>
-                    <h3 className={isDark ? 'text-xl font-semibold text-white mb-5' : 'text-xl font-semibold text-gray-900 mb-5'}>{config.distributionTitle}</h3>
+                    <h3 className={isDark ? 'mb-5 text-xl font-semibold text-white' : 'mb-5 text-xl font-semibold text-gray-900'}>Distribution Metrics</h3>
                     <div className="space-y-4">
                       {normalizedDistributionMetrics.map((item) => (
                         <div key={item.label}>
-                          <div className="flex items-center justify-between text-sm mb-2">
-                            <span className={isDark ? 'text-blue-100 font-medium' : 'text-gray-700 font-medium'}>{item.label}</span>
-                            <span className={isDark ? 'text-blue-200' : 'text-gray-600'}>{item.value}%</span>
+                          <div className="mb-2 flex items-center justify-between text-sm">
+                            <span className={isDark ? 'font-medium text-blue-100' : 'font-medium text-gray-700'}>{item.label}</span>
+                            <span className={isDark ? 'text-blue-200' : 'text-gray-600'}>{Math.round(item.value)}%</span>
                           </div>
-                          <div className={isDark ? 'h-2 bg-white/10 rounded-full overflow-hidden' : 'h-2 bg-gray-200 rounded-full overflow-hidden'}>
-                            <div
-                              className={`h-full rounded-full ${item.barClassName ?? 'bg-blue-600'}`}
-                              style={{ width: `${item.value}%` }}
-                            ></div>
+                          <div className={isDark ? 'h-2 overflow-hidden rounded-full bg-white/10' : 'h-2 overflow-hidden rounded-full bg-gray-200'}>
+                            <div className={`h-full rounded-full ${item.barClassName ?? 'bg-blue-600'}`} style={{ width: `${item.value}%` }}></div>
                           </div>
                         </div>
                       ))}
@@ -295,19 +596,16 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                   </article>
 
                   <article className={`${resultCardClass} p-6`}>
-                    <h3 className={isDark ? 'text-xl font-semibold text-white mb-5' : 'text-xl font-semibold text-gray-900 mb-5'}>{config.metricsTitle}</h3>
+                    <h3 className={isDark ? 'mb-5 text-xl font-semibold text-white' : 'mb-5 text-xl font-semibold text-gray-900'}>Progress Metrics</h3>
                     <div className="space-y-4">
                       {normalizedProgressMetrics.map((metric) => (
                         <div key={metric.label}>
-                          <div className="flex items-center justify-between text-sm mb-2">
-                            <span className={isDark ? 'text-blue-100 font-medium' : 'text-gray-700 font-medium'}>{metric.label}</span>
+                          <div className="mb-2 flex items-center justify-between text-sm">
+                            <span className={isDark ? 'font-medium text-blue-100' : 'font-medium text-gray-700'}>{metric.label}</span>
                             <span className={isDark ? 'text-blue-200' : 'text-gray-600'}>{metric.value}</span>
                           </div>
-                          <div className={isDark ? 'h-2 bg-white/10 rounded-full overflow-hidden' : 'h-2 bg-gray-200 rounded-full overflow-hidden'}>
-                            <div
-                              className="h-full rounded-full bg-blue-600"
-                              style={{ width: `${metric.progress}%` }}
-                            ></div>
+                          <div className={isDark ? 'h-2 overflow-hidden rounded-full bg-white/10' : 'h-2 overflow-hidden rounded-full bg-gray-200'}>
+                            <div className="h-full rounded-full bg-blue-600" style={{ width: `${metric.progress}%` }}></div>
                           </div>
                         </div>
                       ))}
@@ -315,34 +613,32 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                   </article>
                 </div>
 
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                   <article className={`${resultCardClass} p-6`}>
-                    <h3 className={isDark ? 'text-xl font-semibold text-white mb-5' : 'text-xl font-semibold text-gray-900 mb-5'}>Bar Chart: Repository Composition</h3>
-                    <div className={isDark ? 'rounded-xl bg-black/20 border border-white/10 p-4' : 'rounded-xl bg-gray-50 border border-gray-100 p-4'}>
+                    <h3 className={isDark ? 'mb-5 text-xl font-semibold text-white' : 'mb-5 text-xl font-semibold text-gray-900'}>Bar Chart: Repository Composition</h3>
+                    <div className={isDark ? 'rounded-xl border border-white/10 bg-black/20 p-4' : 'rounded-xl border border-gray-100 bg-gray-50 p-4'}>
                       <div className="mx-auto flex h-52 max-w-3xl items-end justify-center gap-3">
-                      {normalizedDistributionMetrics.map((item) => (
-                        <div key={item.label} className="flex-1 h-full flex flex-col items-center justify-end gap-2">
-                          <p className={isDark ? 'text-xs font-semibold text-blue-200' : 'text-xs font-semibold text-gray-700'}>
-                            {item.value}%
-                          </p>
-                          <motion.div
-                            title={`${item.label}: ${item.value}%`}
-                            initial={{ height: 0, opacity: 0.6 }}
-                            animate={{ height: Math.max((item.value / 100) * 150, 12), opacity: 1 }}
-                            transition={{ duration: 0.5 }}
-                            className={isDark ? 'w-full rounded-t-md bg-blue-500/80 border border-blue-300/30' : 'w-full rounded-t-md bg-blue-500'}
-                          />
-                          <p className={isDark ? 'text-[11px] text-blue-100 text-center' : 'text-[11px] text-gray-700 text-center'}>{item.label}</p>
-                        </div>
-                      ))}
+                        {normalizedDistributionMetrics.map((item) => (
+                          <div key={item.label} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
+                            <p className={isDark ? 'text-xs font-semibold text-blue-200' : 'text-xs font-semibold text-gray-700'}>{Math.round(item.value)}%</p>
+                            <motion.div
+                              title={`${item.label}: ${Math.round(item.value)}%`}
+                              initial={{ height: 0, opacity: 0.6 }}
+                              animate={{ height: Math.max((item.value / 100) * 150, 12), opacity: 1 }}
+                              transition={{ duration: 0.5 }}
+                              className={isDark ? 'w-full rounded-t-md border border-blue-300/30 bg-blue-500/80' : 'w-full rounded-t-md bg-blue-500'}
+                            />
+                            <p className={isDark ? 'text-center text-[11px] text-blue-100' : 'text-center text-[11px] text-gray-700'}>{item.label}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </article>
 
                   <article className={`${resultCardClass} p-6`}>
-                    <h3 className={isDark ? 'text-xl font-semibold text-white mb-5' : 'text-xl font-semibold text-gray-900 mb-5'}>Trend Chart: Readiness Metrics</h3>
-                    <div className={isDark ? 'rounded-xl bg-black/20 border border-white/10 p-4' : 'rounded-xl bg-gray-50 border border-gray-100 p-4'}>
-                      <svg viewBox="0 0 100 100" className="w-full h-44">
+                    <h3 className={isDark ? 'mb-5 text-xl font-semibold text-white' : 'mb-5 text-xl font-semibold text-gray-900'}>Trend Chart: Readiness Metrics</h3>
+                    <div className={isDark ? 'rounded-xl border border-white/10 bg-black/20 p-4' : 'rounded-xl border border-gray-100 bg-gray-50 p-4'}>
+                      <svg viewBox="0 0 100 100" className="h-44 w-full">
                         <line x1="8" y1="10" x2="8" y2="90" stroke={isDark ? '#334155' : '#cbd5e1'} strokeWidth="0.8" />
                         <line x1="8" y1="90" x2="92" y2="90" stroke={isDark ? '#334155' : '#cbd5e1'} strokeWidth="0.8" />
                         <polyline
@@ -363,15 +659,8 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                           return (
                             <g key={metric.label}>
                               <circle cx={x} cy={y} r="2" fill={isDark ? '#bfdbfe' : '#1d4ed8'} />
-                              <text
-                                x={x}
-                                y={Math.max(y - 4, 8)}
-                                textAnchor="middle"
-                                fontSize="4"
-                                fill={isDark ? '#bfdbfe' : '#1d4ed8'}
-                                fontWeight="700"
-                              >
-                                {metric.progress}%
+                              <text x={x} y={Math.max(y - 4, 8)} textAnchor="middle" fontSize="4" fill={isDark ? '#bfdbfe' : '#1d4ed8'} fontWeight="700">
+                                {Math.round(metric.progress)}%
                               </text>
                             </g>
                           )
@@ -380,7 +669,7 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {normalizedProgressMetrics.map((metric) => (
                           <div key={`label-${metric.label}`} className={isDark ? 'rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-blue-100' : 'rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-700'}>
-                            <span className="font-semibold">{metric.label}:</span> {metric.progress}%
+                            <span className="font-semibold">{metric.label}:</span> {Math.round(metric.progress)}%
                           </div>
                         ))}
                       </div>
@@ -389,21 +678,17 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                 </div>
 
                 <article className={`${resultCardClass} p-6`}>
-                  <h3 className={isDark ? 'text-xl font-semibold text-white mb-3' : 'text-xl font-semibold text-gray-900 mb-3'}>{config.summaryTitle}</h3>
-                  <p className={isDark ? 'text-blue-100 leading-relaxed' : 'text-gray-700 leading-relaxed'}>{config.summaryText}</p>
+                  <h3 className={isDark ? 'mb-3 text-xl font-semibold text-white' : 'mb-3 text-xl font-semibold text-gray-900'}>Summary</h3>
+                  <p className={isDark ? 'leading-relaxed text-blue-100' : 'leading-relaxed text-gray-700'}>{result.summaryText}</p>
                 </article>
 
-                {config.roadmapItems && config.roadmapItems.length > 0 && (
+                {result.roadmapItems.length > 0 && (
                   <article className={`${resultCardClass} p-6`}>
-                    <h3 className={isDark ? 'text-xl font-semibold text-white mb-4' : 'text-xl font-semibold text-gray-900 mb-4'}>
-                      {config.roadmapTitle ?? 'Roadmap'}
-                    </h3>
+                    <h3 className={isDark ? 'mb-4 text-xl font-semibold text-white' : 'mb-4 text-xl font-semibold text-gray-900'}>Roadmap</h3>
                     <ul className="space-y-3">
-                      {config.roadmapItems.map((item) => (
+                      {result.roadmapItems.map((item) => (
                         <li key={item} className={isDark ? 'flex items-start gap-3 text-blue-100' : 'flex items-start gap-3 text-gray-700'}>
-                          <span className="h-6 w-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
-                            ✓
-                          </span>
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-600">✓</span>
                           <span className="pt-0.5">{item}</span>
                         </li>
                       ))}
@@ -411,9 +696,9 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                   </article>
                 )}
 
-                <article className="bg-gray-900 rounded-2xl shadow-xl p-6 border border-gray-800">
-                  <h3 className="text-lg font-semibold text-white mb-4">{config.rawOutputTitle}</h3>
-                  <pre className="text-xs md:text-sm text-gray-100 overflow-x-auto whitespace-pre-wrap">{prettyRawOutput}</pre>
+                <article className="rounded-2xl border border-gray-800 bg-gray-900 p-6 shadow-xl">
+                  <h3 className="mb-4 text-lg font-semibold text-white">Raw Backend Output</h3>
+                  <pre className="overflow-x-auto whitespace-pre-wrap text-xs text-gray-100 md:text-sm">{prettyRawOutput}</pre>
                 </article>
               </motion.div>
             )}
