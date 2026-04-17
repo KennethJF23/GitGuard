@@ -21,6 +21,7 @@ import {
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import { getLicenseInfo } from '@/lib/licenseDetails'
+import { clearAuthSession, getAuthToken } from '@/lib/authSession'
 
 type ScoreBreakdownItem = {
   key: string
@@ -226,13 +227,11 @@ export default function AnalyzePage() {
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000'
 
   const token = useMemo(() => {
-    if (typeof window === 'undefined') return null
-    return localStorage.getItem('gitguard_token')
+    return getAuthToken()
   }, [])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const currentToken = localStorage.getItem('gitguard_token')
+    const currentToken = getAuthToken()
     if (!currentToken) router.replace('/login')
   }, [router])
 
@@ -372,7 +371,7 @@ export default function AnalyzePage() {
     setSubmitting(true)
 
     try {
-      const currentToken = typeof window !== 'undefined' ? localStorage.getItem('gitguard_token') : null
+      const currentToken = getAuthToken()
       if (!currentToken) {
         router.replace('/login')
         return
@@ -391,10 +390,7 @@ export default function AnalyzePage() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('gitguard_token')
-            localStorage.removeItem('gitguard_user')
-          }
+          clearAuthSession()
           router.replace('/login')
           return
         }
