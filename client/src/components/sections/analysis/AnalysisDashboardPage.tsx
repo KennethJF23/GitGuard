@@ -121,6 +121,7 @@ function buildHumanResult(payload: GenericResponse): DashboardResult {
   const snapshot = (payload.snapshot as GenericResponse | undefined) || {}
   const git = (snapshot.git as GenericResponse | undefined) || {}
   const readme = (snapshot.readme as GenericResponse | undefined) || {}
+  const files = (snapshot.files as GenericResponse | undefined) || {}
 
   const score = clamp(safeNumber(scoreObj.total, safeNumber(scoreObj.value, 0)))
   const breakdown = Array.isArray(scoreObj.breakdown) ? scoreObj.breakdown : []
@@ -178,7 +179,13 @@ function buildHumanResult(payload: GenericResponse): DashboardResult {
       { label: 'Stars', value: String(safeNumber(repo.stars, 0)) },
       { label: 'Forks', value: String(safeNumber(repo.forks, 0)) },
       { label: 'Open Issues', value: String(safeNumber(repo.openIssues, 0)) },
+      { label: 'License', value: String(repo.license || 'N/A') },
+      { label: 'Branches', value: String(safeNumber(git.branches, 0)) },
+      { label: 'Pull Requests', value: String(safeNumber(git.pullRequests, 0)) },
+      { label: 'Contributors', value: String(safeNumber(git.contributors, 0)) },
       { label: 'Commits (90d)', value: String(commitsLast90) },
+      { label: 'Files', value: String(safeNumber(files.fileCount, 0)) },
+      { label: 'Directories', value: String(safeNumber(files.directoryCount, 0)) },
     ],
     distributionMetrics,
     progressMetrics,
@@ -696,10 +703,12 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                   </article>
                 )}
 
-                <article className="rounded-2xl border border-gray-800 bg-gray-900 p-6 shadow-xl">
-                  <h3 className="mb-4 text-lg font-semibold text-white">Raw Backend Output</h3>
-                  <pre className="overflow-x-auto whitespace-pre-wrap text-xs text-gray-100 md:text-sm">{prettyRawOutput}</pre>
-                </article>
+                {config.mode !== 'human' && (
+                  <article className="rounded-2xl border border-gray-800 bg-gray-900 p-6 shadow-xl">
+                    <h3 className="mb-4 text-lg font-semibold text-white">Raw Backend Output</h3>
+                    <pre className="overflow-x-auto whitespace-pre-wrap text-xs text-gray-100 md:text-sm">{prettyRawOutput}</pre>
+                  </article>
+                )}
               </motion.div>
             )}
           </div>
