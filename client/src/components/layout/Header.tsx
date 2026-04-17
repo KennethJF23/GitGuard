@@ -93,6 +93,15 @@ const Header: React.FC = () => {
       ]
     },
     {
+      title: 'Analysis',
+      submenu: 'analysis',
+      items: [
+        { title: 'Human Analysis', href: '/human-analysis' },
+        { title: 'AI Analysis', href: '/ai-analysis' },
+        { title: 'Malware Detection', href: '/malware-detection' }
+      ]
+    },
+    {
       title: 'GitGuard',
       submenu: 'mailinblack',
       items: [
@@ -162,11 +171,14 @@ const Header: React.FC = () => {
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center space-x-8">
             {menuItems.map((item) => (
-              <div key={item.submenu} className="relative group">
+              <div
+                key={item.submenu}
+                className="relative"
+                onMouseEnter={() => setActiveSubmenu(item.submenu)}
+                onMouseLeave={() => setActiveSubmenu(null)}
+              >
                 <button
                   className="flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
-                  onMouseEnter={() => setActiveSubmenu(item.submenu)}
-                  onMouseLeave={() => setActiveSubmenu(null)}
                 >
                   {item.title}
                   <ChevronDown className="ml-1 w-4 h-4" />
@@ -174,83 +186,81 @@ const Header: React.FC = () => {
 
                 {/* Dropdown Menu */}
                 {activeSubmenu === item.submenu && (
-                  <div
-                    className="absolute top-full left-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 p-6"
-                    onMouseEnter={() => setActiveSubmenu(item.submenu)}
-                    onMouseLeave={() => setActiveSubmenu(null)}
-                  >
-                    {item.submenu === 'secure' && (
-                      <div className="space-y-4">
-                        {item.items.map((subItem: any, index) => (
-                          <div
-                            key={index}
-                            className={`p-4 rounded-lg border ${subItem.large ? 'col-span-2' : ''} hover:bg-gray-50 transition-colors`}
-                          >
-                            <div className="flex items-start space-x-3">
-                              {subItem.icon && (
-                                <div className="text-blue-600 mt-1">
-                                  {renderIcon(subItem.icon)}
-                                </div>
-                              )}
-                              <div className="flex-1">
-                                <a
-                                  href={subItem.href}
-                                  className="font-medium text-gray-900 hover:text-blue-600 transition-colors"
-                                >
-                                  {subItem.title}
-                                </a>
-                                {subItem.description && (
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    {subItem.description}
-                                  </p>
+                  <div className="absolute top-full left-0 w-96 pt-2">
+                    <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-6">
+                      {item.submenu === 'secure' && (
+                        <div className="space-y-4">
+                          {item.items.map((subItem: any, index) => (
+                            <div
+                              key={index}
+                              className={`p-4 rounded-lg border ${subItem.large ? 'col-span-2' : ''} hover:bg-gray-50 transition-colors`}
+                            >
+                              <div className="flex items-start space-x-3">
+                                {subItem.icon && (
+                                  <div className="text-blue-600 mt-1">
+                                    {renderIcon(subItem.icon)}
+                                  </div>
                                 )}
+                                <div className="flex-1">
+                                  <a
+                                    href={subItem.href}
+                                    className="font-medium text-gray-900 hover:text-blue-600 transition-colors"
+                                  >
+                                    {subItem.title}
+                                  </a>
+                                  {subItem.description && (
+                                    <p className="text-sm text-gray-600 mt-1">
+                                      {subItem.description}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
 
-                    {item.submenu === 'solutions' && (
-                      <div className="grid grid-cols-3 gap-6">
-                        {item.items.map((category: any, index) => (
-                          <div key={index}>
-                            <h4 className="font-semibold text-xs text-gray-600 uppercase mb-3">
-                              {category.category}
-                            </h4>
-                            <ul className="space-y-2">
-                              {category.links.map((link: any, linkIndex: number) => (
-                                <li key={linkIndex}>
-                                  <a
-                                    href={link.href}
-                                    className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
-                                  >
-                                    {link.title}
-                                  </a>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                      {item.submenu === 'solutions' && (
+                        <div className="grid grid-cols-3 gap-6">
+                          {item.items.map((category: any, index) => (
+                            <div key={index}>
+                              <h4 className="font-semibold text-xs text-gray-600 uppercase mb-3">
+                                {category.category}
+                              </h4>
+                              <ul className="space-y-2">
+                                {category.links.map((link: any, linkIndex: number) => (
+                                  <li key={linkIndex}>
+                                    <a
+                                      href={link.href}
+                                      className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
+                                    >
+                                      {link.title}
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
-                    {item.submenu !== 'secure' && item.submenu !== 'solutions' && (
-                      <ul className="space-y-2">
-                        {item.items.map((subItem: any, index) => (
-                          <li key={index}>
-                            <a
-                              href={subItem.href}
-                              target={subItem.external ? '_blank' : '_self'}
-                              rel={subItem.external ? 'noopener noreferrer' : ''}
-                              className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
-                            >
-                              {subItem.title}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                      {item.submenu !== 'secure' && item.submenu !== 'solutions' && (
+                        <ul className="space-y-2">
+                          {item.items.map((subItem: any, index) => (
+                            <li key={index}>
+                              <a
+                                href={subItem.href}
+                                target={subItem.external ? '_blank' : '_self'}
+                                rel={subItem.external ? 'noopener noreferrer' : ''}
+                                className="text-sm text-gray-700 hover:text-blue-600 transition-colors"
+                              >
+                                {subItem.title}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
