@@ -7,19 +7,56 @@ const app = express();
 // Load env vars from server/.env only (do not use .env.local)
 dotenv.config({ path: path.join(__dirname, ".env") });
 
-const defaultAllowedOrigins = ["http://localhost:3000", "http://127.0.0.1:3000"];
+const defaultAllowedOrigins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+];
 const envAllowedOrigins = String(process.env.FRONTEND_URL || "")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
 const allowedOrigins = new Set(envAllowedOrigins.length > 0 ? envAllowedOrigins : defaultAllowedOrigins);
+const allowPrivateNetworkOrigins = process.env.CORS_ALLOW_PRIVATE_NETWORK !== "0";
+
+function isPrivateNetworkHost(hostname) {
+    const host = String(hostname || "").trim().toLowerCase();
+    if (!host) return false;
+    if (host === "localhost" || host === "127.0.0.1" || host === "::1") return true;
+    if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+    if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+    return false;
+}
+
+function isAllowedOrigin(origin) {
+    if (!origin) return true;
+    if (allowedOrigins.has(origin)) return true;
+
+    if (!allowPrivateNetworkOrigins) return false;
+
+    try {
+        const parsed = new URL(origin);
+        const isHttp = parsed.protocol === "http:" || parsed.protocol === "https:";
+        return isHttp && isPrivateNetworkHost(parsed.hostname);
+    } catch {
+        return false;
+    }
+}
 
 app.use(
     cors({
         origin(origin, callback) {
-            if (!origin) return callback(null, true);
-            if (allowedOrigins.has(origin)) return callback(null, true);
-            return callback(new Error("CORS origin not allowed"));
+            if (isAllowedOrigin(origin)) return callback(null, true);
+
+            // Do not throw; this avoids noisy stack traces for preflight requests.
+            console.warn(`CORS blocked origin: ${origin}`);
+            return callback(null, false);
         },
         methods: ["GET", "POST", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization"],

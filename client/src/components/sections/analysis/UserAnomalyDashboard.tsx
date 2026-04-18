@@ -243,7 +243,11 @@ export default function UserAnomalyDashboard() {
           return
         }
 
-        setError(payload?.message || 'Unable to analyze user profile right now.')
+        const fallbackMessage = response.status
+          ? `Unable to analyze user profile right now (HTTP ${response.status}${response.statusText ? `: ${response.statusText}` : ''}).`
+          : 'Unable to analyze user profile right now.'
+
+        setError(payload?.message || fallbackMessage)
         return
       }
 

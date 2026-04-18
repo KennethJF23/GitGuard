@@ -3283,6 +3283,15 @@ exports.userAnomalyProfileRepository = async (req, res) => {
 
     const nowIso = new Date().toISOString();
     const sinceIso = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString();
+    const warnings = [];
+
+    const toWarning = (label, err) => {
+      const status = err && typeof err.statusCode === "number" ? err.statusCode : null;
+      const message = err instanceof Error && isNonEmptyString(err.message)
+        ? err.message
+        : "Unknown error";
+      return status ? `${label}: ${message} (HTTP ${status})` : `${label}: ${message}`;
+    };
 
     const userResp = await githubRequestJson(`/users/${encodeURIComponent(username)}`);
     const user = userResp && userResp.data ? userResp.data : {};
@@ -3291,10 +3300,17 @@ exports.userAnomalyProfileRepository = async (req, res) => {
     const maxPages = 3;
 
     for (let page = 1; page <= maxPages; page += 1) {
-      const eventsResp = await githubRequestJson(
-        `/users/${encodeURIComponent(username)}/events/public`,
-        { per_page: 100, page },
-      );
+      let eventsResp;
+      try {
+        eventsResp = await githubRequestJson(
+          `/users/${encodeURIComponent(username)}/events/public`,
+          { per_page: 100, page },
+        );
+      } catch (err) {
+        // Keep analysis running even if recent events cannot be fetched.
+        warnings.push(toWarning(`Unable to fetch public events page ${page}`, err));
+        break;
+      }
 
       const batch = Array.isArray(eventsResp && eventsResp.data) ? eventsResp.data : [];
       if (batch.length === 0) break;
@@ -3306,10 +3322,17 @@ exports.userAnomalyProfileRepository = async (req, res) => {
       if (oldestTs && oldestTs < sinceIso) break;
     }
 
-    const reposResp = await githubRequestJson(
-      `/users/${encodeURIComponent(username)}/repos`,
-      { per_page: 60, sort: "pushed", direction: "desc" },
-    );
+    let reposResp;
+    try {
+      reposResp = await githubRequestJson(
+        `/users/${encodeURIComponent(username)}/repos`,
+        { per_page: 60, sort: "pushed", direction: "desc" },
+      );
+    } catch (err) {
+      // Continue with empty repo list so score can still be computed from profile/events.
+      warnings.push(toWarning("Unable to fetch recent repositories", err));
+      reposResp = { data: [] };
+    }
 
     const repos = Array.isArray(reposResp && reposResp.data) ? reposResp.data : [];
     const candidateRepos = repos
@@ -3372,6 +3395,11 @@ exports.userAnomalyProfileRepository = async (req, res) => {
       ...analysis,
     };
 
+    if (warnings.length > 0) {
+      payload.warnings = warnings;
+      payload.partialData = true;
+    }
+
     res.json(payload);
   } catch (err) {
     const status = err && typeof err.statusCode === "number" ? err.statusCode : 500;
@@ -3383,6 +3411,14 @@ exports.userAnomalyProfileRepository = async (req, res) => {
 
     if (status === 403 && /rate limit/i.test(message)) {
       message = "GitHub API rate limit exceeded. Set GITHUB_TOKEN in server environment to increase limits.";
+    }
+
+    if (status === 429) {
+      message = "GitHub API temporarily rate-limited this request. Please retry in a minute.";
+    }
+
+    if (status === 403 && /secondary rate limit|abuse detection/i.test(message)) {
+      message = "GitHub temporarily throttled this request due to high activity. Please retry shortly.";
     }
 
     res.status(status).json({ message });
