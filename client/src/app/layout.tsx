@@ -45,7 +45,7 @@ export default function RootLayout({
       lang="en"
       className={cn("h-full", "antialiased", inter.variable, "font-sans", geist.variable, blackOpsOne.variable)}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col overflow-x-hidden">
         <LenisProvider>
           <AuthGate>{children}</AuthGate>
         </LenisProvider>

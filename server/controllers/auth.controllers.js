@@ -79,7 +79,7 @@ exports.login = async (req,res) => {
         }
 
         if (typeof user.password !== "string" || user.password.length === 0) {
-            return res.status(401).json({message:"This account uses social login. Please continue with Google/GitHub."});
+            return res.status(401).json({message:"Invalid email or password"});
         }
 
         let IsMatch = false;

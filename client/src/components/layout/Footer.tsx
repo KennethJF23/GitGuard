@@ -11,7 +11,7 @@ export function Footer() {
           <div className="sm:col-span-2 md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
               <Image
-                src="/images/Hero_Image.png"
+                src="/images/gglogo.png"
                 alt="GitGuard Logo"
                 width={40}
                 height={40}
