@@ -24,6 +24,12 @@ Create client/.env.local:
 NEXT_PUBLIC_API_BASE_URL=http://localhost:5000
 ```
 
+For deployed frontend (for example Vercel), set:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=https://gitguard.onrender.com
+```
+
 ## Development
 
 Install and run:

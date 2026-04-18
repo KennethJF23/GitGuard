@@ -7,13 +7,15 @@ function isLoopbackHost(value: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1"
 }
 
+const DEFAULT_DEPLOYED_API_BASE_URL = 'https://gitguard.onrender.com'
+
 export function getApiBaseUrl(): string {
   const envBase = stripTrailingSlashes(
     process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || '',
   )
 
   if (typeof window === 'undefined') {
-    return envBase || 'http://localhost:5000'
+    return envBase || DEFAULT_DEPLOYED_API_BASE_URL
   }
 
   const currentHost = window.location.hostname
@@ -31,5 +33,9 @@ export function getApiBaseUrl(): string {
     }
   }
 
-  return `http://${currentHost}:5000`
+  if (isLoopbackHost(currentHost)) {
+    return `http://${currentHost}:5000`
+  }
+
+  return DEFAULT_DEPLOYED_API_BASE_URL
 }
