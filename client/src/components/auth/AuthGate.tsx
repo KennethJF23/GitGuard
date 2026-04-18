@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type PropsWithChildren } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { getAuthToken, validateAuthSession } from '@/lib/authSession'
+import { getApiBaseUrl } from '@/lib/apiBase'
 
 const AUTH_PAGES = ['/login', '/signup']
 const PUBLIC_ROUTES = ['/', ...AUTH_PAGES]
@@ -22,8 +23,7 @@ export default function AuthGate({ children }: PropsWithChildren) {
 
   const routeIsPublic = useMemo(() => isPublicRoute(pathname || '/'), [pathname])
   const routeIsAuthPage = useMemo(() => isAuthPage(pathname || '/'), [pathname])
-  const apiBase =
-    process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+  const apiBase = getApiBaseUrl()
 
   useEffect(() => {
     let cancelled = false

@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getAuthToken, setAuthSession } from '@/lib/authSession'
+import { getApiBaseUrl } from '@/lib/apiBase'
 
 export default function SignUpPage() {
   const router = useRouter()
@@ -14,7 +15,7 @@ export default function SignUpPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000'
+  const apiBase = getApiBaseUrl()
 
   useEffect(() => {
     const token = getAuthToken()

@@ -7,6 +7,7 @@ import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import Button from '@/components/ui/Button'
 import { clearAuthSession, getAuthToken } from '@/lib/authSession'
+import { getApiBaseUrl } from '@/lib/apiBase'
 
 type DashboardMode = 'human' | 'ai' | 'malware'
 
@@ -349,11 +350,20 @@ function buildAiResult(payload: GenericResponse): DashboardResult {
 }
 
 function buildMalwareResult(payload: GenericResponse): DashboardResult {
-  const scoreRaw = safeNumber(payload.totalRiskScore, safeNumber(payload.score, 0))
+  const patternMatch = (payload.patternMatch as GenericResponse | undefined) || {}
+  const scoreRaw = safeNumber(payload.totalRiskScore, safeNumber(payload.score, safeNumber(patternMatch.totalScore, 0)))
   const score = clamp(safeNumber(payload.normalizedRiskScore, (scoreRaw / 25) * 100))
-  const verdict = String(payload.verdict || 'SAFE').toUpperCase()
+  const verdictRaw = payload.verdict
+  const verdict = typeof verdictRaw === 'string'
+    ? verdictRaw.toUpperCase()
+    : String(((verdictRaw as GenericResponse | undefined)?.level || (verdictRaw as GenericResponse | undefined)?.label || 'SAFE')).toUpperCase()
   const ai = ((payload.ai as GenericResponse | undefined)?.parsed as GenericResponse | undefined) || {}
-  const matches = Array.isArray(payload.matches) ? (payload.matches as MalwareMatch[]) : []
+  const matches = Array.isArray(payload.matches)
+    ? (payload.matches as MalwareMatch[])
+    : Array.isArray(patternMatch.matches)
+      ? (patternMatch.matches as MalwareMatch[])
+      : []
+  const matchCount = safeNumber(payload.matchCount, matches.length)
 
   const categories = new Map<string, { indicators: number; weighted: number }>()
   for (const match of matches) {
@@ -406,7 +416,7 @@ function buildMalwareResult(payload: GenericResponse): DashboardResult {
   const confidence = safeNumber(ai.confidence, 0) * 100
   const summaryText =
     String(ai.reasoning || '').trim() ||
-    `Backend malware scan identified ${safeNumber(payload.matchCount, 0)} signals with verdict ${verdict}.`
+    `Backend malware scan identified ${matchCount} signals with verdict ${verdict}.`
 
   const aiIndicators = Array.isArray(ai.indicators)
     ? ai.indicators.map((v) => String(v).trim()).filter(Boolean)
@@ -429,9 +439,9 @@ function buildMalwareResult(payload: GenericResponse): DashboardResult {
     statusValue: verdict,
     statusDescription: `AI confidence ${formatPercent(confidence)}`,
     repoName: String((payload.input as GenericResponse | undefined)?.url || 'Scanned repository'),
-    repoDescription: `Pipeline score ${scoreRaw.toFixed(2)} with ${safeNumber(payload.matchCount, 0)} total matched indicators.`,
+    repoDescription: `Pipeline score ${scoreRaw.toFixed(2)} with ${matchCount} total matched indicators.`,
     repoMetrics: [
-      { label: 'Indicators', value: String(safeNumber(payload.matchCount, 0)) },
+      { label: 'Indicators', value: String(matchCount) },
       { label: 'Unique Patterns', value: String(new Set(matches.map((m) => m.pattern).filter(Boolean)).size) },
       { label: 'Verdict', value: verdict },
       { label: 'Confidence', value: formatPercent(confidence) },
@@ -469,7 +479,7 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
   const [result, setResult] = useState<DashboardResult | null>(null)
 
   const isDark = true
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000'
+  const apiBase = getApiBaseUrl()
 
   const normalizedDistributionMetrics = (result?.distributionMetrics || []).map((item) => ({
     ...item,

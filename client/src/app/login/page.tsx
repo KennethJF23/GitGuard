@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getAuthToken, setAuthSession, validateAuthSession } from '@/lib/authSession'
+import { getApiBaseUrl } from '@/lib/apiBase'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -11,8 +12,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+  const apiBase = getApiBaseUrl()
   const validatedApiBase = apiBase
 
   useEffect(() => {
