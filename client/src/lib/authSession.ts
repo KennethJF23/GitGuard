@@ -2,6 +2,18 @@ export const AUTH_TOKEN_KEY = 'gitguard_token'
 export const AUTH_USER_KEY = 'gitguard_user'
 // TODO(security): migrate auth token storage to server-issued HttpOnly cookies.
 
+function writeAuthCookie(token: string): void {
+  if (typeof document === 'undefined') return
+
+  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${AUTH_TOKEN_KEY}=${encodeURIComponent(token)}; Path=/; SameSite=Lax${secure}`
+}
+
+function clearAuthCookie(): void {
+  if (typeof document === 'undefined') return
+  document.cookie = `${AUTH_TOKEN_KEY}=; Path=/; Max-Age=0; SameSite=Lax`
+}
+
 type AuthUser = {
   id: string
   username: string
@@ -45,6 +57,9 @@ export function getAuthToken(): string | null {
     return null
   }
 
+  // Keep middleware-visible cookie in sync for routes protected server-side.
+  writeAuthCookie(token)
+
   return token
 }
 
@@ -59,6 +74,7 @@ export function setAuthSession(data: AuthPayload): void {
 
   localStorage.setItem(AUTH_TOKEN_KEY, data.token)
   localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user))
+  writeAuthCookie(data.token)
 }
 
 export function clearAuthSession(): void {
@@ -66,6 +82,7 @@ export function clearAuthSession(): void {
 
   localStorage.removeItem(AUTH_TOKEN_KEY)
   localStorage.removeItem(AUTH_USER_KEY)
+  clearAuthCookie()
 }
 
 export async function validateAuthSession(apiBase: string): Promise<boolean> {
