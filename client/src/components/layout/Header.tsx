@@ -231,9 +231,6 @@ export default function Header({ onLogin, onRegister }: HeaderProps) {
             </span>
             <span className="flex items-center gap-2">
               <span className="text-base font-black tracking-tight text-white" style={{ fontFamily: 'var(--font-black-ops-one)' }}>GitGuard</span>
-              <span className="hidden rounded-full border border-blue-400/30 bg-blue-500/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-300 sm:inline-flex">
-                Beta
-              </span>
             </span>
           </Link>
 
