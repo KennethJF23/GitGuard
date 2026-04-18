@@ -42,6 +42,7 @@ export default function Header({ onLogin, onRegister }: HeaderProps) {
     { label: 'Human Analyzer', href: '/analyze', activeOn: ['/analyze'] },
     { label: 'AI Analyzer', href: '/ai-analyze', activeOn: ['/ai-analyze', '/ai-analysis'] },
     { label: 'Malware Detector', href: '/malware-detection', activeOn: ['/malware-detection', '/malware'] },
+    { label: 'User Anomaly', href: '/user-anomaly', activeOn: ['/user-anomaly'] },
   ]
 
   const token = useSyncExternalStore(
@@ -197,7 +198,7 @@ export default function Header({ onLogin, onRegister }: HeaderProps) {
       initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-      className="sticky top-0 z-50 w-full border-b border-blue-500/10 bg-gradient-to-b from-[#0b1220]/92 via-[#0d1528]/88 to-[#0a0f1f]/85 backdrop-blur-2xl"
+      className="sticky top-0 z-50 w-full border-b border-blue-500/10 bg-linear-to-b from-[#0b1220]/92 via-[#0d1528]/88 to-[#0a0f1f]/85 backdrop-blur-2xl"
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[#58a6ff]/50 to-transparent" />
 

@@ -19,6 +19,7 @@ const {
   generateAIInsights,
   generateTrustReport,
 } = require("../services/intelligence.service");
+const { analyzeUserProfileAndCommits } = require("../services/userContributionAnomaly.service");
 
 // In-memory cache to avoid repeated MongoDB calls.
 // This is process-local (each Node instance caches independently).
@@ -144,6 +145,183 @@ function parseGithubRepoInput(input) {
   }
 
   return { owner, repo };
+}
+
+function parseGithubUsernameInput(input) {
+  if (!isNonEmptyString(input)) {
+    throw badRequest("Please provide a GitHub username or profile URL.");
+  }
+
+  const raw = input.trim();
+
+  // Accept plain username.
+  if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
+    const cleaned = raw.replace(/^github\.com\//i, "").replace(/^@/, "").split("/").filter(Boolean)[0] || "";
+    if (!cleaned) {
+      throw badRequest("Invalid GitHub username input.");
+    }
+    return cleaned;
+  }
+
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw badRequest("Invalid URL. Please provide a valid GitHub profile link.");
+  }
+
+  if (!/^(www\.)?github\.com$/i.test(url.hostname)) {
+    throw badRequest("Only github.com user profiles are supported.");
+  }
+
+  const segments = url.pathname.split("/").filter(Boolean);
+  if (segments.length < 1) {
+    throw badRequest("Invalid GitHub profile URL. Expected /username");
+  }
+
+  return segments[0].replace(/^@/, "");
+}
+
+function computeMedian(values) {
+  const list = (Array.isArray(values) ? values : [])
+    .map((value) => safeNumber(value, NaN))
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => a - b);
+
+  if (list.length === 0) return 0;
+  const mid = Math.floor(list.length / 2);
+  if (list.length % 2 === 0) {
+    return (list[mid - 1] + list[mid]) / 2;
+  }
+  return list[mid];
+}
+
+function computeCollaboratorDeterministicScore(profile, baselines) {
+  const totalContributions = safeNumber(baselines.totalContributions, 1);
+  const medianContributions = Math.max(1, safeNumber(baselines.medianContributions, 0));
+
+  const lifetimeContributions = safeNumber(profile.lifetimeContributions, 0);
+  const contributionShare = lifetimeContributions / totalContributions;
+  const contributionRatioToMedian = lifetimeContributions / (medianContributions + 1);
+
+  const suspiciousMessageRatio = safeNumber(profile.suspiciousMessageRatio, 0);
+  const nightCommitRatio = safeNumber(profile.nightCommitRatio, 0);
+  const weekendCommitRatio = safeNumber(profile.weekendCommitRatio, 0);
+  const recencyBurstRatio = safeNumber(profile.recencyBurstRatio, 0);
+
+  let score = 0;
+
+  if (contributionShare >= 0.55) score += 28;
+  else if (contributionShare >= 0.4) score += 18;
+  else if (contributionShare >= 0.25) score += 10;
+
+  if (contributionRatioToMedian >= 6) score += 24;
+  else if (contributionRatioToMedian >= 4) score += 16;
+  else if (contributionRatioToMedian >= 2.5) score += 8;
+
+  if (suspiciousMessageRatio >= 0.25) score += 18;
+  else if (suspiciousMessageRatio >= 0.15) score += 10;
+
+  if (nightCommitRatio >= 0.7) score += 12;
+  else if (nightCommitRatio >= 0.5) score += 6;
+
+  if (weekendCommitRatio >= 0.75) score += 8;
+
+  if (recencyBurstRatio >= 0.7) score += 10;
+  else if (recencyBurstRatio >= 0.5) score += 5;
+
+  const normalizedScore = clamp(Math.round(score), 0, 100);
+  let riskLevel = "LOW";
+  if (normalizedScore >= 70) riskLevel = "HIGH";
+  else if (normalizedScore >= 40) riskLevel = "MEDIUM";
+
+  const reasons = [];
+  if (contributionShare >= 0.4) reasons.push("Single collaborator contributes a dominant share of total commits");
+  if (contributionRatioToMedian >= 4) reasons.push("Contribution volume is far above collaborator baseline");
+  if (suspiciousMessageRatio >= 0.15) reasons.push("Commit messages include risky or low-quality patterns");
+  if (nightCommitRatio >= 0.5) reasons.push("Large share of commits happen during night UTC hours");
+  if (recencyBurstRatio >= 0.5) reasons.push("Recent contribution spike is unusually concentrated");
+
+  return {
+    score: normalizedScore,
+    riskLevel,
+    reasons: reasons.slice(0, 5),
+    contributionShare: Math.round(contributionShare * 1000) / 1000,
+    contributionRatioToMedian: Math.round(contributionRatioToMedian * 1000) / 1000,
+  };
+}
+
+function buildCollaboratorCommitSignals(commits) {
+  const suspiciousMessageRegexes = [
+    /\b(temp|tmp|quick fix|hack|bypass|disable\s+auth|disable\s+security)\b/i,
+    /\b(debug\s+only|remove\s+checks|skip\s+validation|hotfix\s+prod)\b/i,
+    /\b(wip|test\s+commit|trial|dummy)\b/i,
+  ];
+
+  const list = Array.isArray(commits) ? commits : [];
+  if (list.length === 0) {
+    return {
+      analyzedCommits: 0,
+      suspiciousMessageRatio: 0,
+      nightCommitRatio: 0,
+      weekendCommitRatio: 0,
+      recencyBurstRatio: 0,
+      lastCommitAt: null,
+    };
+  }
+
+  let suspiciousCount = 0;
+  let nightCount = 0;
+  let weekendCount = 0;
+
+  let latestTs = null;
+  const dayBuckets = new Map();
+
+  for (const commit of list) {
+    const commitObj = commit && typeof commit.commit === "object" ? commit.commit : null;
+    const message = commitObj && typeof commitObj.message === "string" ? commitObj.message : "";
+    const authored =
+      commitObj && commitObj.author && typeof commitObj.author === "object" && typeof commitObj.author.date === "string"
+        ? commitObj.author.date
+        : null;
+
+    if (suspiciousMessageRegexes.some((re) => re.test(message))) {
+      suspiciousCount += 1;
+    }
+
+    if (authored) {
+      const authoredTs = new Date(authored).getTime();
+      if (Number.isFinite(authoredTs)) {
+        if (latestTs === null || authoredTs > latestTs) latestTs = authoredTs;
+      }
+
+      const authoredDate = new Date(authored);
+      const hour = authoredDate.getUTCHours();
+      const day = authoredDate.getUTCDay();
+
+      if (hour < 6) nightCount += 1;
+      if (day === 0 || day === 6) weekendCount += 1;
+
+      const key = authored.slice(0, 10);
+      dayBuckets.set(key, (dayBuckets.get(key) || 0) + 1);
+    }
+  }
+
+  const dailyCounts = Array.from(dayBuckets.values());
+  const medianDaily = computeMedian(dailyCounts);
+  const burstThreshold = Math.max(2, Math.round(Math.max(1, medianDaily) * 1.8));
+  const burstDays = dailyCounts.filter((count) => count >= burstThreshold).length;
+
+  const total = list.length;
+
+  return {
+    analyzedCommits: total,
+    suspiciousMessageRatio: suspiciousCount / total,
+    nightCommitRatio: nightCount / total,
+    weekendCommitRatio: weekendCount / total,
+    recencyBurstRatio: dayBuckets.size > 0 ? burstDays / dayBuckets.size : 0,
+    lastCommitAt: latestTs !== null ? new Date(latestTs).toISOString() : null,
+  };
 }
 
 function buildGitHubApiUrl(path, query) {
@@ -3075,6 +3253,328 @@ exports.malwarePipelineScanRepository = async (req, res) => {
     const status = err && typeof err.statusCode === "number" ? err.statusCode : 500;
 
     let message = err instanceof Error ? err.message : "Unable to run malware scan.";
+
+    if (status === 404) {
+      message = "Repository not found (or it may be private).";
+    }
+
+    if (status === 403 && /rate limit/i.test(message)) {
+      message = "GitHub API rate limit exceeded. Set GITHUB_TOKEN in server environment to increase limits.";
+    }
+
+    res.status(status).json({ message });
+  }
+};
+
+/**
+ * User anomaly profile + commit behavior detection.
+ * Input: { username?: string, profileUrl?: string, lookbackDays?: number }
+ */
+exports.userAnomalyProfileRepository = async (req, res) => {
+  try {
+    const usernameInput =
+      (req.body && (req.body.username || req.body.githubUsername || req.body.profileUrl || req.body.input)) || "";
+    const username = parseGithubUsernameInput(usernameInput);
+
+    const lookbackRaw = Number(req.body && req.body.lookbackDays);
+    const lookbackDays = Number.isFinite(lookbackRaw)
+      ? clamp(Math.floor(lookbackRaw), 7, 180)
+      : 45;
+
+    const nowIso = new Date().toISOString();
+    const sinceIso = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString();
+
+    const userResp = await githubRequestJson(`/users/${encodeURIComponent(username)}`);
+    const user = userResp && userResp.data ? userResp.data : {};
+
+    const events = [];
+    const maxPages = 3;
+
+    for (let page = 1; page <= maxPages; page += 1) {
+      const eventsResp = await githubRequestJson(
+        `/users/${encodeURIComponent(username)}/events/public`,
+        { per_page: 100, page },
+      );
+
+      const batch = Array.isArray(eventsResp && eventsResp.data) ? eventsResp.data : [];
+      if (batch.length === 0) break;
+
+      events.push(...batch.filter((evt) => evt && typeof evt.created_at === "string" && evt.created_at >= sinceIso));
+
+      const oldest = batch[batch.length - 1];
+      const oldestTs = oldest && typeof oldest.created_at === "string" ? oldest.created_at : null;
+      if (oldestTs && oldestTs < sinceIso) break;
+    }
+
+    const reposResp = await githubRequestJson(
+      `/users/${encodeURIComponent(username)}/repos`,
+      { per_page: 60, sort: "pushed", direction: "desc" },
+    );
+
+    const repos = Array.isArray(reposResp && reposResp.data) ? reposResp.data : [];
+    const candidateRepos = repos
+      .filter((repo) => repo && typeof repo.full_name === "string")
+      .sort((a, b) => {
+        const left = typeof a.pushed_at === "string" ? a.pushed_at : "";
+        const right = typeof b.pushed_at === "string" ? b.pushed_at : "";
+        return right.localeCompare(left);
+      })
+      .slice(0, 10);
+
+    const repoCommits = await Promise.all(
+      candidateRepos.map(async (repo) => {
+        const fullName = typeof repo.full_name === "string" ? repo.full_name : "";
+        const [owner, repoName] = fullName.split("/");
+
+        if (!owner || !repoName) {
+          return { repo: fullName || "unknown", commits: [] };
+        }
+
+        try {
+          const commitsResp = await githubRequestJson(
+            `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/commits`,
+            {
+              author: username,
+              since: sinceIso,
+              per_page: 100,
+            },
+          );
+
+          const commits = Array.isArray(commitsResp && commitsResp.data) ? commitsResp.data : [];
+          return { repo: fullName, commits };
+        } catch {
+          // Ignore inaccessible/private repos.
+          return { repo: fullName, commits: [] };
+        }
+      }),
+    );
+
+    const analysis = analyzeUserProfileAndCommits({
+      user,
+      events,
+      repoCommits,
+      lookbackDays,
+      nowIso,
+    });
+
+    const payload = {
+      username,
+      lookbackDays,
+      since: sinceIso,
+      account: {
+        id: user && user.id,
+        login: user && user.login,
+        createdAt: user && user.created_at,
+        publicRepos: safeNumber(user && user.public_repos, 0),
+        followers: safeNumber(user && user.followers, 0),
+        following: safeNumber(user && user.following, 0),
+      },
+      ...analysis,
+    };
+
+    res.json(payload);
+  } catch (err) {
+    const status = err && typeof err.statusCode === "number" ? err.statusCode : 500;
+    let message = err instanceof Error ? err.message : "Unable to analyze user profile and commits.";
+
+    if (status === 404) {
+      message = "GitHub user not found.";
+    }
+
+    if (status === 403 && /rate limit/i.test(message)) {
+      message = "GitHub API rate limit exceeded. Set GITHUB_TOKEN in server environment to increase limits.";
+    }
+
+    res.status(status).json({ message });
+  }
+};
+
+/**
+ * Repository collaborator outlier analysis with deterministic + OpenRouter AI reasoning.
+ * Input: { url?: string, lookbackDays?: number, topCollaborators?: number }
+ */
+exports.collaboratorOutliersRepository = async (req, res) => {
+  try {
+    const url = (req.body && (req.body.url || req.body.repoUrl || req.body.input)) || "";
+    const { owner, repo } = parseGithubRepoInput(url);
+
+    const lookbackRaw = Number(req.body && req.body.lookbackDays);
+    const lookbackDays = Number.isFinite(lookbackRaw)
+      ? clamp(Math.floor(lookbackRaw), 14, 365)
+      : 90;
+
+    const topRaw = Number(req.body && req.body.topCollaborators);
+    const topCollaborators = Number.isFinite(topRaw)
+      ? clamp(Math.floor(topRaw), 3, 20)
+      : 10;
+
+    const sinceIso = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString();
+
+    const [repoMetaResp, contributorsResp] = await Promise.all([
+      githubRequestJson(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`),
+      githubRequestJson(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contributors`, {
+        per_page: 100,
+        anon: false,
+      }),
+    ]);
+
+    const repoMeta = repoMetaResp && repoMetaResp.data ? repoMetaResp.data : {};
+    const contributors = Array.isArray(contributorsResp && contributorsResp.data) ? contributorsResp.data : [];
+
+    if (contributors.length === 0) {
+      return res.status(404).json({ message: "No collaborators found for this repository." });
+    }
+
+    const selectedContributors = contributors
+      .filter((item) => item && typeof item.login === "string")
+      .sort((a, b) => safeNumber(b.contributions, 0) - safeNumber(a.contributions, 0))
+      .slice(0, topCollaborators);
+
+    const collaboratorProfiles = await Promise.all(
+      selectedContributors.map(async (item) => {
+        const login = item.login;
+        const lifetimeContributions = safeNumber(item.contributions, 0);
+
+        let commits = [];
+        try {
+          const commitsResp = await githubRequestJson(
+            `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits`,
+            {
+              author: login,
+              since: sinceIso,
+              per_page: 100,
+            },
+          );
+
+          commits = Array.isArray(commitsResp && commitsResp.data) ? commitsResp.data : [];
+        } catch {
+          commits = [];
+        }
+
+        const signals = buildCollaboratorCommitSignals(commits);
+
+        return {
+          login,
+          avatarUrl: typeof item.avatar_url === "string" ? item.avatar_url : null,
+          profileUrl: typeof item.html_url === "string" ? item.html_url : null,
+          lifetimeContributions,
+          ...signals,
+        };
+      }),
+    );
+
+    const totalContributions = collaboratorProfiles.reduce(
+      (sum, profile) => sum + safeNumber(profile.lifetimeContributions, 0),
+      0,
+    );
+    const medianContributions = computeMedian(collaboratorProfiles.map((profile) => profile.lifetimeContributions));
+
+    const deterministic = collaboratorProfiles.map((profile) => {
+      const score = computeCollaboratorDeterministicScore(profile, {
+        totalContributions,
+        medianContributions,
+      });
+
+      return {
+        ...profile,
+        deterministic: score,
+      };
+    });
+
+    const deterministicOutliers = deterministic
+      .filter((profile) => safeNumber(profile.deterministic && profile.deterministic.score, 0) >= 40)
+      .sort(
+        (a, b) =>
+          safeNumber(b.deterministic && b.deterministic.score, 0) -
+          safeNumber(a.deterministic && a.deterministic.score, 0),
+      )
+      .slice(0, 8)
+      .map((profile) => ({
+        login: profile.login,
+        score: safeNumber(profile.deterministic && profile.deterministic.score, 0),
+        riskLevel: profile.deterministic ? profile.deterministic.riskLevel : "LOW",
+        reasons: profile.deterministic && Array.isArray(profile.deterministic.reasons)
+          ? profile.deterministic.reasons
+          : [],
+      }));
+
+    const aiInput = {
+      repository: {
+        owner,
+        repo,
+        fullName: repoMeta && repoMeta.full_name,
+        createdAt: repoMeta && repoMeta.created_at,
+        pushedAt: repoMeta && repoMeta.pushed_at,
+        stargazersCount: safeNumber(repoMeta && repoMeta.stargazers_count, 0),
+        forksCount: safeNumber(repoMeta && repoMeta.forks_count, 0),
+      },
+      lookbackDays,
+      collaboratorProfiles: deterministic.map((profile) => ({
+        login: profile.login,
+        lifetimeContributions: profile.lifetimeContributions,
+        analyzedCommits: profile.analyzedCommits,
+        suspiciousMessageRatio: Math.round(safeNumber(profile.suspiciousMessageRatio, 0) * 1000) / 1000,
+        nightCommitRatio: Math.round(safeNumber(profile.nightCommitRatio, 0) * 1000) / 1000,
+        weekendCommitRatio: Math.round(safeNumber(profile.weekendCommitRatio, 0) * 1000) / 1000,
+        recencyBurstRatio: Math.round(safeNumber(profile.recencyBurstRatio, 0) * 1000) / 1000,
+        deterministicScore: safeNumber(profile.deterministic && profile.deterministic.score, 0),
+        deterministicRiskLevel: profile.deterministic ? profile.deterministic.riskLevel : "LOW",
+      })),
+      deterministicOutliers,
+    };
+
+    let ai = null;
+    try {
+      const prompt =
+        "You are a security analyst. Analyze repository collaborators for contribution outliers and suspicious activity. " +
+        "Return STRICT JSON ONLY with this schema: " +
+        "{\"outliers\":[{\"login\":string,\"riskLevel\":\"LOW\"|\"MEDIUM\"|\"HIGH\",\"score\":number,\"reasons\":string[]}],\"teamRiskSummary\":{\"riskLevel\":\"LOW\"|\"MEDIUM\"|\"HIGH\",\"summary\":string},\"monitoringRecommendations\":string[]}. " +
+        "Use deterministic signals heavily; do not hallucinate. Keep reasons concise and concrete.\n\n" +
+        `COLLABORATOR_DATA_JSON:\n${JSON.stringify(aiInput, null, 2)}`;
+
+      const generated = await openRouterGenerateText(prompt);
+      ai = {
+        model: generated.model,
+        output: generated.text,
+        parsed: tryParseJsonObject(generated.text),
+      };
+    } catch (err) {
+      ai = {
+        model: null,
+        output: null,
+        parsed: null,
+        error: err instanceof Error ? err.message : "AI analysis unavailable.",
+      };
+    }
+
+    const payload = {
+      input: {
+        url,
+        owner,
+        repo,
+        lookbackDays,
+        topCollaborators,
+      },
+      repository: {
+        fullName: repoMeta && repoMeta.full_name,
+        createdAt: repoMeta && repoMeta.created_at,
+        pushedAt: repoMeta && repoMeta.pushed_at,
+      },
+      summary: {
+        collaboratorsAnalyzed: deterministic.length,
+        totalContributions,
+        medianContributions,
+        deterministicOutlierCount: deterministicOutliers.length,
+      },
+      collaborators: deterministic,
+      deterministicOutliers,
+      ai,
+    };
+
+    res.json(payload);
+  } catch (err) {
+    const status = err && typeof err.statusCode === "number" ? err.statusCode : 500;
+    let message = err instanceof Error ? err.message : "Unable to analyze collaborator outliers.";
 
     if (status === 404) {
       message = "Repository not found (or it may be private).";
