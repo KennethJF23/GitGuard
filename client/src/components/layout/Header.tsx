@@ -73,6 +73,15 @@ export default function Header({ onLogin, onRegister }: HeaderProps) {
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false)
 
+  const handleHomeNavigation = (event: MouseEvent<HTMLAnchorElement>) => {
+    closeMobileMenu()
+
+    if (pathname !== '/' && typeof window !== 'undefined') {
+      event.preventDefault()
+      window.location.assign('/')
+    }
+  }
+
   const scrollToSection = (sectionId: string, updateHash = true) => {
     if (typeof window === 'undefined') {
       return
@@ -206,6 +215,7 @@ export default function Header({ onLogin, onRegister }: HeaderProps) {
         <div className="flex h-18 items-center justify-between gap-4">
           <Link
             href="/"
+            onClick={handleHomeNavigation}
             aria-label="GitGuard home"
             className="group inline-flex items-center gap-3 rounded-lg border border-blue-400/30 bg-linear-to-br from-white/8 to-white/4 px-3 py-2.5 transition-all hover:border-blue-300/60 hover:from-white/12 hover:to-white/8 shadow-[0_4px_12px_rgba(88,166,255,0.1)]"
           >
@@ -235,6 +245,7 @@ export default function Header({ onLogin, onRegister }: HeaderProps) {
                     <Link
                       key={item.label}
                       href={item.href}
+                      onClick={item.href === '/' ? handleHomeNavigation : undefined}
                       className={navLinkClass(active)}
                       aria-current={active ? 'page' : undefined}
                     >
@@ -350,7 +361,7 @@ export default function Header({ onLogin, onRegister }: HeaderProps) {
                         <Link
                           key={item.label}
                           href={item.href}
-                          onClick={closeMobileMenu}
+                          onClick={item.href === '/' ? handleHomeNavigation : closeMobileMenu}
                           className={
                             'rounded-lg border px-4 py-2.5 text-sm font-semibold transition-all ' +
                             (active
