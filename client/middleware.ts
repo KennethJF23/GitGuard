@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 
 const AUTH_PAGES = ['/login', '/signup']
 const PUBLIC_ROUTES = ['/', ...AUTH_PAGES]
+const PUBLIC_FILE = /\.(.*)$/
 
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))
@@ -15,7 +16,12 @@ function isAuthPage(pathname: string): boolean {
 export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl
 
-  if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname === '/favicon.ico') {
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api') ||
+    pathname === '/favicon.ico' ||
+    PUBLIC_FILE.test(pathname)
+  ) {
     return NextResponse.next()
   }
 
