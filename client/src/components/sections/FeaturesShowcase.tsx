@@ -23,7 +23,7 @@ const featureItems: FeatureItem[] = [
       'Analyze repository structure, activity signals, and documentation quality before you approve any third-party code.',
     bulletPoints: ['Score breakdown by signal type', 'Repository momentum tracking', 'License guidance with actionable points'],
     icon: BrainCircuit,
-    imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
+    imageSrc: '/images/human%20repo.png',
     imageAlt: 'Human analysis dashboard preview',
   },
   {
@@ -33,7 +33,7 @@ const featureItems: FeatureItem[] = [
       'Generate AI-backed repository insights with compliance indicators and practical recommendations for secure adoption.',
     bulletPoints: ['Readiness and quality indicators', 'Policy and compliance summaries', 'Structured raw output for audit trails'],
     icon: Radar,
-    imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
+    imageSrc: '/images/aiassist.png',
     imageAlt: 'AI analysis insights panel preview',
   },
   {
@@ -43,7 +43,7 @@ const featureItems: FeatureItem[] = [
       'Scan source archives, detect suspicious patterns, and classify risk with transparent rules you can verify.',
     bulletPoints: ['Keyword and pattern matching', 'Severity-based risk grouping', 'Focused review recommendations'],
     icon: ShieldCheck,
-    imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
+    imageSrc: '/images/malware.png',
     imageAlt: 'Malware detection findings preview',
   },
 ]

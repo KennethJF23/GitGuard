@@ -1,6 +1,6 @@
 export const AUTH_TOKEN_KEY = 'gitguard_token'
 export const AUTH_USER_KEY = 'gitguard_user'
-export const AUTH_COOKIE_NAME = 'gitguard_token'
+// TODO(security): migrate auth token storage to server-issued HttpOnly cookies.
 
 type AuthUser = {
   id: string
@@ -13,22 +13,6 @@ type AuthPayload = {
   id: string
   username: string
   email: string
-}
-
-function getCookieValue(name: string): string | null {
-  if (typeof document === 'undefined') return null
-
-  const encodedPrefix = `${encodeURIComponent(name)}=`
-  const parts = document.cookie.split(';')
-
-  for (const part of parts) {
-    const trimmed = part.trim()
-    if (trimmed.startsWith(encodedPrefix)) {
-      return decodeURIComponent(trimmed.slice(encodedPrefix.length))
-    }
-  }
-
-  return null
 }
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
@@ -53,7 +37,7 @@ function isTokenExpired(token: string): boolean {
 
 export function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null
-  const token = localStorage.getItem(AUTH_TOKEN_KEY) || getCookieValue(AUTH_COOKIE_NAME)
+  const token = localStorage.getItem(AUTH_TOKEN_KEY)
   if (!token) return null
 
   if (isTokenExpired(token)) {
@@ -75,7 +59,6 @@ export function setAuthSession(data: AuthPayload): void {
 
   localStorage.setItem(AUTH_TOKEN_KEY, data.token)
   localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user))
-  document.cookie = `${encodeURIComponent(AUTH_COOKIE_NAME)}=${encodeURIComponent(data.token)}; Path=/; Max-Age=2592000; SameSite=Lax`
 }
 
 export function clearAuthSession(): void {
@@ -83,7 +66,6 @@ export function clearAuthSession(): void {
 
   localStorage.removeItem(AUTH_TOKEN_KEY)
   localStorage.removeItem(AUTH_USER_KEY)
-  document.cookie = `${encodeURIComponent(AUTH_COOKIE_NAME)}=; Path=/; Max-Age=0; SameSite=Lax`
 }
 
 export async function validateAuthSession(apiBase: string): Promise<boolean> {

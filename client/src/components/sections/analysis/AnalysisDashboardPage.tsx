@@ -27,6 +27,52 @@ type RepoMetric = {
   value: string
 }
 
+type LicenseDetection = {
+  license: string
+  confidence?: string
+  source?: string
+  riskImpact?: string
+}
+
+type MalwareTechnicalDetail = {
+  category: string
+  matchedPatterns: string[]
+  riskContribution: number
+}
+
+type MalwareExplanation = {
+  summary?: string
+  keyFindings?: string[]
+  technicalDetails?: MalwareTechnicalDetail[]
+  verdictReason?: string
+  combinations?: string[]
+}
+
+type AIRecommendation = {
+  priority: 'HIGH' | 'MEDIUM' | 'LOW' | string
+  action: string
+}
+
+type AIInsights = {
+  summary?: string
+  strengths?: string[]
+  risks?: string[]
+  trustScoreReasoning?: string
+  recommendations?: AIRecommendation[]
+}
+
+type TrustReport = {
+  trustScore?: number
+  breakdown?: {
+    codeSafety?: number
+    documentation?: number
+    license?: number
+    activity?: number
+  }
+  verdict?: string
+  explanation?: string
+}
+
 type DashboardResult = {
   score: number
   scoreText: string
@@ -41,6 +87,10 @@ type DashboardResult = {
   progressMetrics: ProgressMetric[]
   summaryText: string
   roadmapItems: string[]
+  licenseDetection?: LicenseDetection | null
+  malwareExplanation?: MalwareExplanation | null
+  aiInsights?: AIInsights | null
+  trustReport?: TrustReport | null
   rawOutput: Record<string, unknown>
 }
 
@@ -66,6 +116,12 @@ type MalwareMatch = {
   weight?: number
 }
 
+const LOADING_STEPS_BY_MODE: Record<DashboardMode, string[]> = {
+  human: ['Validating repository URL', 'Collecting repository metadata', 'Computing human-readability scores', 'Preparing final dashboard'],
+  ai: ['Validating repository URL', 'Collecting metadata and README', 'Generating local explanation summary', 'Preparing final dashboard'],
+  malware: ['Validating repository URL', 'Downloading repository snapshot', 'Running keyword + AST malware scan', 'Preparing final dashboard'],
+}
+
 function safeNumber(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
@@ -84,6 +140,24 @@ function toTitle(value: string): string {
 
 function formatPercent(value: number): string {
   return `${Math.round(clamp(value))}%`
+}
+
+function isValidGithubRepositoryUrl(input: string): boolean {
+  const value = String(input || '').trim()
+  if (!value) return false
+
+  if (!/^https?:\/\//i.test(value)) {
+    return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value.replace(/^github\.com\//i, ''))
+  }
+
+  try {
+    const parsed = new URL(value)
+    if (!/^(www\.)?github\.com$/i.test(parsed.hostname)) return false
+    const segments = parsed.pathname.split('/').filter(Boolean)
+    return segments.length >= 2
+  } catch {
+    return false
+  }
 }
 
 function extractRoadmapFromText(text: string): string[] {
@@ -191,6 +265,10 @@ function buildHumanResult(payload: GenericResponse): DashboardResult {
     progressMetrics,
     summaryText: String(payload.summary || 'No summary available.'),
     roadmapItems: Array.isArray(payload.roadmap) ? payload.roadmap.map((v) => String(v)).filter(Boolean).slice(0, 6) : [],
+    licenseDetection: ((payload.licenseDetection as LicenseDetection | undefined) || null),
+    malwareExplanation: null,
+    aiInsights: null,
+    trustReport: ((payload.trustReport as TrustReport | undefined) || null),
     rawOutput: payload,
   }
 }
@@ -241,6 +319,7 @@ function buildAiResult(payload: GenericResponse): DashboardResult {
 
   const summaryText = aiOutput || 'AI scan completed. No narrative text returned by backend model output.'
   const roadmapItems = extractRoadmapFromText(aiOutput)
+  const aiInsights = ((payload.aiInsights as AIInsights | undefined) || null)
 
   return {
     score,
@@ -261,13 +340,17 @@ function buildAiResult(payload: GenericResponse): DashboardResult {
     progressMetrics,
     summaryText,
     roadmapItems,
+    licenseDetection: ((payload.license as LicenseDetection | undefined) || null),
+    malwareExplanation: null,
+    aiInsights,
+    trustReport: ((payload.trustReport as TrustReport | undefined) || null),
     rawOutput: payload,
   }
 }
 
 function buildMalwareResult(payload: GenericResponse): DashboardResult {
-  const scoreRaw = safeNumber(payload.score, 0)
-  const score = clamp((scoreRaw / 25) * 100)
+  const scoreRaw = safeNumber(payload.totalRiskScore, safeNumber(payload.score, 0))
+  const score = clamp(safeNumber(payload.normalizedRiskScore, (scoreRaw / 25) * 100))
   const verdict = String(payload.verdict || 'SAFE').toUpperCase()
   const ai = ((payload.ai as GenericResponse | undefined)?.parsed as GenericResponse | undefined) || {}
   const matches = Array.isArray(payload.matches) ? (payload.matches as MalwareMatch[]) : []
@@ -341,7 +424,7 @@ function buildMalwareResult(payload: GenericResponse): DashboardResult {
   return {
     score,
     scoreText: `${Math.round(score)} / 100`,
-    scoreCaption: `Normalized from pipeline score ${scoreRaw.toFixed(2)} returned by backend malware scan.`,
+    scoreCaption: `Normalized from backend risk score ${scoreRaw.toFixed(2)} returned by malware scan.`,
     statusTitle: 'Verdict Card',
     statusValue: verdict,
     statusDescription: `AI confidence ${formatPercent(confidence)}`,
@@ -357,6 +440,10 @@ function buildMalwareResult(payload: GenericResponse): DashboardResult {
     progressMetrics,
     summaryText,
     roadmapItems,
+    licenseDetection: ((payload.licenseDetection as LicenseDetection | undefined) || null),
+    malwareExplanation: ((payload.malwareExplanation as MalwareExplanation | undefined) || null),
+    aiInsights: null,
+    trustReport: ((payload.trustReport as TrustReport | undefined) || null),
     rawOutput: payload,
   }
 }
@@ -377,6 +464,7 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
   const router = useRouter()
   const [repoUrl, setRepoUrl] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingStepIndex, setLoadingStepIndex] = useState(0)
   const [error, setError] = useState('')
   const [result, setResult] = useState<DashboardResult | null>(null)
 
@@ -394,9 +482,8 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
   }))
 
   const licenseMetric = result?.repoMetrics.find((metric) => /license/i.test(metric.label))
-  const hasLicense = licenseMetric
-    ? !/none|missing|unknown|n\/a|no/i.test(String(licenseMetric.value || '').toLowerCase())
-    : false
+  const detectedLicense = result?.licenseDetection?.license || String(licenseMetric?.value || 'MISSING')
+  const hasLicense = !/missing|unknown|n\/a|noassertion|none/i.test(String(detectedLicense || '').toLowerCase())
 
   const averageReadiness =
     normalizedProgressMetrics.length > 0
@@ -407,6 +494,18 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
     normalizedDistributionMetrics.length > 0
       ? [...normalizedDistributionMetrics].sort((a, b) => b.value - a.value)[0]
       : null
+
+  const trustBreakdown = result?.trustReport?.breakdown || {}
+  const trustMetrics: ProgressMetric[] = [
+    { label: 'Code Safety', progress: clamp(safeNumber(trustBreakdown.codeSafety, 0)), value: formatPercent(safeNumber(trustBreakdown.codeSafety, 0)) },
+    { label: 'Documentation', progress: clamp(safeNumber(trustBreakdown.documentation, 0)), value: formatPercent(safeNumber(trustBreakdown.documentation, 0)) },
+    { label: 'License', progress: clamp(safeNumber(trustBreakdown.license, 0)), value: formatPercent(safeNumber(trustBreakdown.license, 0)) },
+    { label: 'Activity', progress: clamp(safeNumber(trustBreakdown.activity, 0)), value: formatPercent(safeNumber(trustBreakdown.activity, 0)) },
+  ]
+
+  const aiInsightRecommendations: AIRecommendation[] = Array.isArray(result?.aiInsights?.recommendations)
+    ? (result?.aiInsights?.recommendations as AIRecommendation[])
+    : []
 
   const prettyRawOutput = useMemo(
     () => (result ? JSON.stringify(result.rawOutput, null, 2) : ''),
@@ -419,9 +518,18 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
   const resultPanelClass =
     'space-y-6 rounded-3xl border border-white/10 bg-linear-to-b from-white/[0.05] via-white/[0.025] to-transparent p-4 md:p-6 backdrop-blur-sm'
 
+  const loadingSteps = LOADING_STEPS_BY_MODE[config.mode] || [config.loadingLabel]
+  const loadingLabel = loadingSteps[Math.min(loadingStepIndex, Math.max(loadingSteps.length - 1, 0))] || config.loadingLabel
+
   const handleAnalyze = async () => {
-    if (!repoUrl.trim()) {
+    const normalizedRepoUrl = repoUrl.trim()
+    if (!normalizedRepoUrl) {
       setError('Please provide a GitHub repository URL.')
+      return
+    }
+
+    if (!isValidGithubRepositoryUrl(normalizedRepoUrl)) {
+      setError('Enter a valid GitHub repository URL (or owner/repo).')
       return
     }
 
@@ -433,7 +541,15 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
 
     setError('')
     setIsLoading(true)
+    setLoadingStepIndex(0)
     setResult(null)
+
+    let loadingTimer: ReturnType<typeof setInterval> | null = null
+    if (loadingSteps.length > 1) {
+      loadingTimer = setInterval(() => {
+        setLoadingStepIndex((prev) => Math.min(prev + 1, loadingSteps.length - 1))
+      }, 1200)
+    }
 
     try {
       const response = await fetch(`${apiBase}${endpointForMode(config.mode)}`, {
@@ -442,7 +558,7 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ url: repoUrl.trim() }),
+        body: JSON.stringify({ url: normalizedRepoUrl }),
       })
 
       const payload = (await response.json().catch(() => ({}))) as GenericResponse
@@ -462,15 +578,19 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
     } catch {
       setError('Unable to reach backend service. Ensure server is running.')
     } finally {
+      if (loadingTimer) {
+        clearInterval(loadingTimer)
+      }
       setIsLoading(false)
+      setLoadingStepIndex(0)
     }
   }
 
   return (
-    <div className={isDark ? 'min-h-screen bg-linear-to-br from-blue-950 via-slate-950 to-black text-white' : 'min-h-screen bg-white'}>
+    <div className={isDark ? 'min-h-screen overflow-x-hidden bg-linear-to-br from-blue-950 via-slate-950 to-black text-white' : 'min-h-screen overflow-x-hidden bg-white'}>
       <Header />
 
-      <main className={isDark ? 'py-16' : 'py-16 bg-linear-to-b from-white to-gray-50'}>
+      <main className={isDark ? 'overflow-x-hidden py-16' : 'overflow-x-hidden bg-linear-to-b from-white to-gray-50 py-16'}>
         <section className="container mx-auto px-4">
           <div className="mx-auto max-w-6xl space-y-8">
             <div className="text-center">
@@ -510,7 +630,7 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
               <div className={isDark ? 'flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-10 shadow-xl' : 'flex items-center justify-center rounded-2xl border border-gray-100 bg-white p-10 shadow-xl'}>
                 <div className={isDark ? 'flex items-center gap-4 text-blue-100' : 'flex items-center gap-4 text-gray-700'}>
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600"></div>
-                  <span className="text-lg font-medium">{config.loadingLabel}</span>
+                  <span className="text-lg font-medium">{loadingLabel}</span>
                 </div>
               </div>
             )}
@@ -560,10 +680,12 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                   <article className={`${resultCardClass} p-5`}>
                     <p className={isDark ? 'text-xs uppercase tracking-wide text-blue-200' : 'text-xs uppercase tracking-wide text-gray-500'}>License Status</p>
                     <p className={isDark ? `mt-2 text-2xl font-bold ${hasLicense ? 'text-emerald-300' : 'text-red-300'}` : `mt-2 text-2xl font-bold ${hasLicense ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {hasLicense ? 'HAS LICENSE' : 'UNKNOWN'}
+                      {hasLicense ? 'VALID LICENSE' : 'MISSING LICENSE'}
                     </p>
                     <p className={isDark ? 'mt-2 text-sm text-blue-100' : 'mt-2 text-sm text-gray-600'}>
-                      {licenseMetric ? `Detected: ${licenseMetric.value}` : 'License value not available in backend response.'}
+                      {`Detected: ${detectedLicense}`}
+                      {result?.licenseDetection?.confidence ? ` (${result.licenseDetection.confidence} confidence)` : ''}
+                      {result?.licenseDetection?.source ? ` via ${result.licenseDetection.source}` : ''}
                     </p>
                   </article>
 
@@ -683,6 +805,100 @@ const AnalysisDashboardPage: React.FC<AnalysisDashboardPageProps> = ({ config })
                     </div>
                   </article>
                 </div>
+
+                {result.malwareExplanation && (
+                  <article className={`${resultCardClass} p-6`}>
+                    <h3 className={isDark ? 'mb-3 text-xl font-semibold text-white' : 'mb-3 text-xl font-semibold text-gray-900'}>Why This Repo Is Risky</h3>
+                    <p className={isDark ? 'mb-4 leading-relaxed text-blue-100' : 'mb-4 leading-relaxed text-gray-700'}>
+                      {result.malwareExplanation.summary || result.malwareExplanation.verdictReason || 'No risk narrative returned.'}
+                    </p>
+                    {Array.isArray(result.malwareExplanation.keyFindings) && result.malwareExplanation.keyFindings.length > 0 && (
+                      <ul className="space-y-2">
+                        {result.malwareExplanation.keyFindings.slice(0, 6).map((finding) => (
+                          <li key={finding} className={isDark ? 'text-sm text-blue-100' : 'text-sm text-gray-700'}>
+                            • {finding}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {Array.isArray(result.malwareExplanation.combinations) && result.malwareExplanation.combinations.length > 0 && (
+                      <p className={isDark ? 'mt-4 text-sm font-medium text-cyan-200' : 'mt-4 text-sm font-medium text-blue-700'}>
+                        High-risk combinations: {result.malwareExplanation.combinations.join(', ')}
+                      </p>
+                    )}
+                  </article>
+                )}
+
+                {result.malwareExplanation && Array.isArray(result.malwareExplanation.technicalDetails) && result.malwareExplanation.technicalDetails.length > 0 && (
+                  <article className={`${resultCardClass} p-6`}>
+                    <h3 className={isDark ? 'mb-4 text-xl font-semibold text-white' : 'mb-4 text-xl font-semibold text-gray-900'}>Technical Breakdown</h3>
+                    <div className="space-y-3">
+                      {result.malwareExplanation.technicalDetails.slice(0, 6).map((detail) => (
+                        <details key={`${detail.category}-${detail.riskContribution}`} className={isDark ? 'rounded-lg border border-white/10 bg-black/20 p-3' : 'rounded-lg border border-gray-200 bg-gray-50 p-3'}>
+                          <summary className={isDark ? 'cursor-pointer font-medium text-blue-100' : 'cursor-pointer font-medium text-gray-800'}>
+                            {toTitle(detail.category)} - {detail.riskContribution}% contribution
+                          </summary>
+                          <p className={isDark ? 'mt-2 text-xs text-blue-200' : 'mt-2 text-xs text-gray-600'}>
+                            Matched patterns: {detail.matchedPatterns.join(', ') || 'N/A'}
+                          </p>
+                        </details>
+                      ))}
+                    </div>
+                  </article>
+                )}
+
+                {result.aiInsights && (
+                  <article className={`${resultCardClass} p-6`}>
+                    <h3 className={isDark ? 'mb-4 text-xl font-semibold text-white' : 'mb-4 text-xl font-semibold text-gray-900'}>AI Insights</h3>
+                    <p className={isDark ? 'mb-3 text-blue-100' : 'mb-3 text-gray-700'}>{result.aiInsights.summary || 'No AI summary available.'}</p>
+                    {Array.isArray(result.aiInsights.risks) && result.aiInsights.risks.length > 0 && (
+                      <div className="mb-3">
+                        <p className={isDark ? 'mb-1 text-xs uppercase tracking-wide text-blue-200' : 'mb-1 text-xs uppercase tracking-wide text-gray-500'}>Risks</p>
+                        <ul className="space-y-1">
+                          {result.aiInsights.risks.slice(0, 6).map((risk) => (
+                            <li key={risk} className={isDark ? 'text-sm text-blue-100' : 'text-sm text-gray-700'}>• {risk}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {aiInsightRecommendations.length > 0 && (
+                      <div>
+                        <p className={isDark ? 'mb-1 text-xs uppercase tracking-wide text-blue-200' : 'mb-1 text-xs uppercase tracking-wide text-gray-500'}>Recommendations</p>
+                        <ul className="space-y-2">
+                          {aiInsightRecommendations.slice(0, 6).map((rec) => (
+                            <li key={`${rec.priority}-${rec.action}`} className={isDark ? 'text-sm text-blue-100' : 'text-sm text-gray-700'}>
+                              <span className={isDark ? 'mr-2 rounded bg-blue-500/20 px-2 py-0.5 text-xs font-semibold text-blue-200' : 'mr-2 rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700'}>{rec.priority}</span>
+                              {rec.action}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </article>
+                )}
+
+                {result.trustReport && (
+                  <article className={`${resultCardClass} p-6`}>
+                    <h3 className={isDark ? 'mb-3 text-xl font-semibold text-white' : 'mb-3 text-xl font-semibold text-gray-900'}>Trust Explanation</h3>
+                    <p className={isDark ? 'mb-2 text-blue-100' : 'mb-2 text-gray-700'}>
+                      Trust Score: <span className="font-semibold">{Math.round(safeNumber(result.trustReport.trustScore, 0))}</span> - {result.trustReport.verdict || 'Unknown'}
+                    </p>
+                    <p className={isDark ? 'mb-4 text-sm text-blue-200' : 'mb-4 text-sm text-gray-600'}>{result.trustReport.explanation || 'No trust explanation provided.'}</p>
+                    <div className="space-y-3">
+                      {trustMetrics.map((metric) => (
+                        <div key={`trust-${metric.label}`}>
+                          <div className="mb-1 flex items-center justify-between text-xs">
+                            <span className={isDark ? 'text-blue-100' : 'text-gray-700'}>{metric.label}</span>
+                            <span className={isDark ? 'text-blue-200' : 'text-gray-600'}>{metric.value}</span>
+                          </div>
+                          <div className={isDark ? 'h-2 overflow-hidden rounded-full bg-white/10' : 'h-2 overflow-hidden rounded-full bg-gray-200'}>
+                            <div className="h-full rounded-full bg-cyan-500" style={{ width: `${metric.progress}%` }}></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                )}
 
                 <article className={`${resultCardClass} p-6`}>
                   <h3 className={isDark ? 'mb-3 text-xl font-semibold text-white' : 'mb-3 text-xl font-semibold text-gray-900'}>Summary</h3>

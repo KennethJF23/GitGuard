@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
+import { clearAuthSession } from '@/lib/authSession'
 
 type HeaderProps = {
   onLogin?: () => void
@@ -69,9 +70,25 @@ export default function Header({ onLogin, onRegister }: HeaderProps) {
     return paths.some((basePath) => pathname === basePath || pathname.startsWith(`${basePath}/`))
   }
 
-  useEffect(() => {
-    setIsMobileMenuOpen(false)
-  }, [pathname])
+  const closeMobileMenu = () => setIsMobileMenuOpen(false)
+
+  const scrollToSection = (sectionId: string, updateHash = true) => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const section = document.getElementById(sectionId)
+    if (!section) {
+      return
+    }
+
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setActiveGuestSection(sectionId)
+
+    if (updateHash) {
+      window.history.replaceState(null, '', `/#${sectionId}`)
+    }
+  }
 
   useEffect(() => {
     if (typeof window === 'undefined' || isAuthed || pathname !== '/') {
@@ -136,32 +153,9 @@ export default function Header({ onLogin, onRegister }: HeaderProps) {
     }`
 
   const handleSignOut = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('gitguard_token')
-      localStorage.removeItem('gitguard_user')
-    }
+    clearAuthSession()
     setIsMobileMenuOpen(false)
     router.push('/')
-  }
-
-  const closeMobileMenu = () => setIsMobileMenuOpen(false)
-
-  const scrollToSection = (sectionId: string, updateHash = true) => {
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    const section = document.getElementById(sectionId)
-    if (!section) {
-      return
-    }
-
-    section.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    setActiveGuestSection(sectionId)
-
-    if (updateHash) {
-      window.history.replaceState(null, '', `/#${sectionId}`)
-    }
   }
 
   const handleGuestNavClick = (event: MouseEvent<HTMLAnchorElement>, sectionId: string) => {
@@ -216,7 +210,7 @@ export default function Header({ onLogin, onRegister }: HeaderProps) {
           >
             <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-400/40 bg-linear-to-br from-blue-500/20 to-blue-600/10 shadow-[0_0_0_1px_rgba(88,166,255,0.3),0_4px_12px_rgba(13,24,45,0.5)]">
               <Image
-                src="/logomailinblack2.webp"
+                src="/images/gglogo.png"
                 alt="GitGuard Logo"
                 width={30}
                 height={30}

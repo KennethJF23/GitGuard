@@ -1,14 +1,24 @@
 const axios = require("axios");
 
 async function verifyCaptcha(req, res, next) {
+  const captchaEnabled = process.env.RECAPTCHA_ENABLED === "true";
   const captchaSecret = process.env.RECAPTCHA_SECRET_KEY?.trim();
   const isProd = process.env.NODE_ENV === "production";
 
+  // Keep local development friction low unless explicitly enabled.
+  if (!isProd && !captchaEnabled) {
+    return next();
+  }
+
+  if (!captchaEnabled) {
+    return next();
+  }
+
   if (!captchaSecret) {
-    return res.status(500).json({
-      message:
-        "CAPTCHA is not configured on the server (missing RECAPTCHA_SECRET_KEY in server/.env).",
-    });
+    if (!isProd) {
+      return next();
+    }
+    return res.status(500).json({ message: "CAPTCHA is enabled but not configured on server." });
   }
 
   const captchaToken = req.body?.captchaToken;

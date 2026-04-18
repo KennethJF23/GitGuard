@@ -1,6 +1,7 @@
 import React from 'react'
 import { ArrowRight } from 'lucide-react'
 import cn from 'classnames'
+import Link from 'next/link'
 
 interface ButtonProps {
   children: React.ReactNode
@@ -52,10 +53,19 @@ const Button: React.FC<ButtonProps> = ({
   )
 
   if (href) {
+    const isExternal = /^https?:\/\//i.test(href)
+    if (isExternal) {
+      return (
+        <a href={href} className={classes} target="_blank" rel="noreferrer">
+          {content}
+        </a>
+      )
+    }
+
     return (
-      <a href={href} className={classes}>
+      <Link href={href} className={classes}>
         {content}
-      </a>
+      </Link>
     )
   }
 

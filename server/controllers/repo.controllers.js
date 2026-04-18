@@ -12,6 +12,13 @@ const mongoose = require("mongoose");
 const { redisGetJson, redisSetJson } = require("../config/redis");
 const MalwareKeyword = require("../models/malwareKeywords.models");
 const { scanGithubRepoForMalwarePipeline } = require("../services/malwareScanPipeline");
+const {
+  detectRepositoryLicense,
+  generateMalwareExplanation,
+  applyContextAwareRiskAdjustments,
+  generateAIInsights,
+  generateTrustReport,
+} = require("../services/intelligence.service");
 
 // In-memory cache to avoid repeated MongoDB calls.
 // This is process-local (each Node instance caches independently).
@@ -64,6 +71,24 @@ function safeNumber(value, fallback = 0) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function getMalwareRiskLevelFromNormalized(normalizedRiskScore) {
+  const n = clamp(safeNumber(normalizedRiskScore, 0), 0, 100);
+  if (n >= 75) return "CRITICAL";
+  if (n >= 50) return "HIGH";
+  if (n >= 25) return "MODERATE";
+  return "LOW";
+}
+
+function buildMalwareRiskMetrics(totalScore) {
+  const roundedScore = Math.round(safeNumber(totalScore, 0) * 100) / 100;
+  const normalizedRiskScore = Math.round(clamp((roundedScore / 25) * 100, 0, 100));
+  return {
+    totalRiskScore: roundedScore,
+    normalizedRiskScore,
+    riskLevel: getMalwareRiskLevelFromNormalized(normalizedRiskScore),
+  };
 }
 
 function daysBetween(isoDateA, isoDateB) {
@@ -176,6 +201,20 @@ function buildMalwareScanCacheKey(owner, repo) {
   const baseKey = `malware-scan:v2:${String(owner).toLowerCase()}/${String(repo).toLowerCase()}`;
   const digest = crypto.createHash("sha256").update(baseKey).digest("hex");
   return `malware-scan:v2:${digest}`;
+}
+
+function getMalwarePipelineCacheTtlSeconds() {
+  const raw = process.env.REDIS_MALWARE_PIPELINE_TTL_SECONDS;
+  if (!isNonEmptyString(raw)) return 600;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 600;
+  return Math.floor(parsed);
+}
+
+function buildMalwarePipelineCacheKey(owner, repo) {
+  const baseKey = `malware-pipeline:v2:${String(owner).toLowerCase()}/${String(repo).toLowerCase()}`;
+  const digest = crypto.createHash("sha256").update(baseKey).digest("hex");
+  return `malware-pipeline:v2:${digest}`;
 }
 
 function textIncludesAny(haystack, needles) {
@@ -401,11 +440,9 @@ function getOpenRouterModels() {
   } else if (isNonEmptyString(rawModel)) {
     models = [rawModel.trim()];
   } else {
-    // User requested the OpenRouter free route by default.
     models = ["openrouter/free"];
   }
 
-  // Deduplicate while preserving order.
   const seen = new Set();
   models = models.filter((m) => {
     const key = m.toLowerCase();
@@ -422,10 +459,7 @@ function getOpenRouterModels() {
     throw err;
   }
 
-  // Safety rails: enforce free-only usage.
   for (const model of models) {
-    // OpenRouter routed models (like openrouter/free) are allowed, but we still
-    // enforce $0 routing via provider.max_price in the request.
     if (model.startsWith("openrouter/")) continue;
 
     if (!model.endsWith(":free")) {
@@ -447,7 +481,6 @@ function extractOpenRouterText(payload) {
 
   if (typeof content === "string") return content.trim();
 
-  // Some OpenAI-compatible APIs may return a rich content array.
   if (Array.isArray(content)) {
     const text = content
       .map((part) => (part && part.type === "text" && typeof part.text === "string" ? part.text : ""))
@@ -484,7 +517,6 @@ async function openRouterGenerateText(prompt) {
   const timeoutMs = getFetchTimeoutMs("OPENROUTER_TIMEOUT_MS", 25_000);
 
   const shouldFallback = (statusCode, message) => {
-    // Typical transient failures for free-tier/shared providers.
     if (statusCode === 429) return true;
     if (statusCode === 408) return true;
     if (statusCode === 502 || statusCode === 503 || statusCode === 504) return true;
@@ -509,7 +541,6 @@ async function openRouterGenerateText(prompt) {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
-            // Optional headers recommended by OpenRouter (harmless if omitted)
             "X-Title": "RepoSmart",
           },
           body: JSON.stringify({
@@ -518,8 +549,6 @@ async function openRouterGenerateText(prompt) {
             temperature: 0.2,
             max_tokens: 1024,
             provider: {
-              // Enforce free-only usage at the routing layer.
-              // If no $0 provider is available, the request will fail rather than charge.
               max_price: { prompt: 0, completion: 0 },
               sort: "price",
             },
@@ -550,7 +579,6 @@ async function openRouterGenerateText(prompt) {
           message = json.error.message;
         }
 
-        // OpenRouter sometimes includes provider details under error.metadata.raw.
         if (
           json.error.metadata &&
           typeof json.error.metadata === "object" &&
@@ -1013,6 +1041,29 @@ async function githubRequestText(path, query, accept) {
   }
 
   return { data: text, headers: res.headers };
+}
+
+function encodeGitHubPath(pathValue) {
+  return String(pathValue || "")
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+async function fetchRepositoryFileText({ owner, repo, filePath }) {
+  const encodedPath = encodeGitHubPath(filePath);
+  if (!encodedPath) {
+    throw badRequest("Invalid repository file path.");
+  }
+
+  const response = await githubRequestText(
+    `/repos/${owner}/${repo}/contents/${encodedPath}`,
+    undefined,
+    "application/vnd.github.raw",
+  );
+
+  return typeof response.data === "string" ? response.data : "";
 }
 
 function parseLastPageFromLinkHeader(linkHeader) {
@@ -1630,6 +1681,13 @@ exports.analyzeRepository = async (req, res) => {
     };
 
     const readme = analyzeReadme(readmeText);
+    const licenseDetection = await detectRepositoryLicense({
+      owner,
+      repo,
+      repoMeta,
+      treeInfo,
+      fetchFileText: fetchRepositoryFileText,
+    });
 
     const score = computeScore({
       repo: repoMeta,
@@ -1638,6 +1696,14 @@ exports.analyzeRepository = async (req, res) => {
       tree: treeInfo,
       languages,
       gitStats,
+    });
+
+    const trustReport = generateTrustReport({
+      baseScore: score,
+      licenseDetection,
+      malwareRisk: { normalizedRiskScore: 0 },
+      readmeSnapshot: readme,
+      gitSnapshot: gitStats,
     });
 
     const summary = buildSummary({ score, readme, tooling, gitStats, repo: repoMeta });
@@ -1671,13 +1737,14 @@ exports.analyzeRepository = async (req, res) => {
         forks: safeNumber(repoMeta.forks_count, 0),
         watchers: safeNumber(repoMeta.watchers_count, 0),
         openIssues: safeNumber(repoMeta.open_issues_count, 0),
-        license: repoMeta.license ? repoMeta.license.spdx_id : null,
+        license: licenseDetection.license,
         topics: Array.isArray(repoMeta.topics) ? repoMeta.topics : [],
         createdAt: repoMeta.created_at,
         updatedAt: repoMeta.updated_at,
         pushedAt: repoMeta.pushed_at,
         sizeKb: safeNumber(repoMeta.size, 0),
       },
+      licenseDetection,
       snapshot: {
         files: {
           fileCount: treeInfo.fileCount,
@@ -1698,6 +1765,7 @@ exports.analyzeRepository = async (req, res) => {
         git: gitStats,
       },
       score,
+      trustReport,
       summary,
       roadmap,
 
@@ -1757,10 +1825,53 @@ exports.aiScanRepository = async (req, res) => {
       typeof analyzeCached.snapshot === "object"
     ) {
       const snapshot = analyzeCached.snapshot;
+      const licenseDetection =
+        analyzeCached.licenseDetection && typeof analyzeCached.licenseDetection === "object"
+          ? analyzeCached.licenseDetection
+          : {
+              license: analyzeCached.repo.license || "MISSING",
+              confidence: analyzeCached.repo.license ? "high" : "low",
+              source: analyzeCached.repo.license ? "github_api" : "not_found",
+              ...(analyzeCached.repo.license ? null : { riskImpact: "HIGH" }),
+            };
+
+      const pipelineCache = await redisGetJson(buildMalwarePipelineCacheKey(owner, repo));
+      const malwareSummary =
+        pipelineCache && pipelineCache.malwareExplanation && typeof pipelineCache.malwareExplanation.summary === "string"
+          ? pipelineCache.malwareExplanation.summary
+          : "Malware pipeline not executed yet.";
+      const keyCategories =
+        pipelineCache && Array.isArray(pipelineCache.matches)
+          ? Array.from(
+              new Set(
+                pipelineCache.matches
+                  .map((m) => (m && typeof m.category === "string" ? m.category : null))
+                  .filter(Boolean),
+              ),
+            ).slice(0, 6)
+          : [];
+      const malwareRiskLevel =
+        pipelineCache && typeof pipelineCache.riskLevel === "string" ? pipelineCache.riskLevel : "UNKNOWN";
+
+      const trustReport =
+        analyzeCached.trustReport && typeof analyzeCached.trustReport === "object"
+          ? analyzeCached.trustReport
+          : generateTrustReport({
+              baseScore: analyzeCached.score,
+              licenseDetection,
+              malwareRisk: { normalizedRiskScore: 0 },
+              readmeSnapshot: snapshot.readme,
+              gitSnapshot: snapshot.git,
+            });
 
       const metadata = {
         input: { owner, repo, url },
-        repo: analyzeCached.repo,
+        repo: { ...analyzeCached.repo, license: licenseDetection.license },
+        license: licenseDetection,
+        trustReport,
+        malwareSummary,
+        keyCategories,
+        riskLevel: malwareRiskLevel,
         snapshot: {
           files: snapshot.files,
           languagesTop: snapshot.languagesTop,
@@ -1780,13 +1891,21 @@ exports.aiScanRepository = async (req, res) => {
         `METADATA_JSON:\n${JSON.stringify(metadata, null, 2)}`;
 
       const ai = await openRouterGenerateText(prompt);
+      const aiParsed = tryParseJsonObject(ai.text);
+      const aiInsights = generateAIInsights({
+        metadata,
+        aiParsed,
+        trustReport,
+      });
 
       const payload = {
         ...metadata,
         ai: {
           model: ai.model,
           output: ai.text,
+          parsed: aiParsed,
         },
+        aiInsights,
       };
 
       await redisSetJson(cacheKey, payload, getAiScanCacheTtlSeconds());
@@ -1849,6 +1968,42 @@ exports.aiScanRepository = async (req, res) => {
     const pathsSet = new Set(treeInfo.paths);
     const tooling = detectTooling(pathsSet);
     const readme = analyzeReadme(readmeText);
+    const licenseDetection = await detectRepositoryLicense({
+      owner,
+      repo,
+      repoMeta,
+      treeInfo,
+      fetchFileText: fetchRepositoryFileText,
+    });
+
+    const pipelineCache = await redisGetJson(buildMalwarePipelineCacheKey(owner, repo));
+    const malwareSummary =
+      pipelineCache && pipelineCache.malwareExplanation && typeof pipelineCache.malwareExplanation.summary === "string"
+        ? pipelineCache.malwareExplanation.summary
+        : "Malware pipeline not executed yet.";
+    const keyCategories =
+      pipelineCache && Array.isArray(pipelineCache.matches)
+        ? Array.from(
+            new Set(
+              pipelineCache.matches
+                .map((m) => (m && typeof m.category === "string" ? m.category : null))
+                .filter(Boolean),
+            ),
+          ).slice(0, 6)
+        : [];
+    const malwareRiskLevel =
+      pipelineCache && typeof pipelineCache.riskLevel === "string" ? pipelineCache.riskLevel : "UNKNOWN";
+
+    const trustReport = generateTrustReport({
+      baseScore: null,
+      licenseDetection,
+      malwareRisk: {
+        normalizedRiskScore:
+          pipelineCache && typeof pipelineCache.normalizedRiskScore === "number" ? pipelineCache.normalizedRiskScore : 0,
+      },
+      readmeSnapshot: readme,
+      gitSnapshot: null,
+    });
 
     // Language percentages (top 5)
     const entries = Object.entries(languages);
@@ -1875,13 +2030,18 @@ exports.aiScanRepository = async (req, res) => {
         forks: safeNumber(repoMeta.forks_count, 0),
         watchers: safeNumber(repoMeta.watchers_count, 0),
         openIssues: safeNumber(repoMeta.open_issues_count, 0),
-        license: repoMeta.license ? repoMeta.license.spdx_id : null,
+        license: licenseDetection.license,
         topics: Array.isArray(repoMeta.topics) ? repoMeta.topics : [],
         createdAt: repoMeta.created_at,
         updatedAt: repoMeta.updated_at,
         pushedAt: repoMeta.pushed_at,
         sizeKb: safeNumber(repoMeta.size, 0),
       },
+      license: licenseDetection,
+      trustReport,
+      malwareSummary,
+      keyCategories,
+      riskLevel: malwareRiskLevel,
       snapshot: {
         files: {
           fileCount: treeInfo.fileCount,
@@ -1913,13 +2073,21 @@ exports.aiScanRepository = async (req, res) => {
       `METADATA_JSON:\n${JSON.stringify(metadata, null, 2)}`;
 
     const ai = await openRouterGenerateText(prompt);
+    const aiParsed = tryParseJsonObject(ai.text);
+    const aiInsights = generateAIInsights({
+      metadata,
+      aiParsed,
+      trustReport,
+    });
 
     const payload = {
       ...metadata,
       ai: {
         model: ai.model,
         output: ai.text,
+        parsed: aiParsed,
       },
+      aiInsights,
     };
 
     await redisSetJson(cacheKey, payload, getAiScanCacheTtlSeconds());
@@ -2098,6 +2266,14 @@ exports.malwareCheckRepository = async (req, res) => {
       },
     };
 
+    const licenseDetection = await detectRepositoryLicense({
+      owner,
+      repo,
+      repoMeta,
+      treeInfo,
+      fetchFileText: fetchRepositoryFileText,
+    });
+
     let ai = null;
     try {
       const aiPrompt =
@@ -2116,7 +2292,6 @@ exports.malwareCheckRepository = async (req, res) => {
         parsed: tryParseJsonObject(generated.text),
       };
     } catch {
-      // OpenRouter isn't mandatory for the endpoint; we still return keyword matches.
       ai = null;
     }
 
@@ -2128,12 +2303,40 @@ exports.malwareCheckRepository = async (req, res) => {
       filePathsText: corpusByField.filePaths,
       aiParsed: ai && ai.parsed ? ai.parsed : null,
     });
+    const contextAdjusted = applyContextAwareRiskAdjustments({
+      score: totalScore,
+      matches,
+      readmeText,
+    });
+    const risk = buildMalwareRiskMetrics(contextAdjusted.adjustedScore);
+    const malwareExplanation = generateMalwareExplanation({
+      score: contextAdjusted.adjustedScore,
+      matchCount: matches.length,
+      matches,
+      verdict: verdict && verdict.level ? verdict.level : "SAFE",
+    });
+    const trustReport = generateTrustReport({
+      baseScore: null,
+      licenseDetection,
+      malwareRisk: risk,
+      readmeSnapshot: {
+        present: isNonEmptyString(readmeText),
+        hasInstall: /\b(install|installation|getting started|setup)\b/i.test(readmeText || ""),
+        hasUsage: /\b(usage|how to use|examples?)\b/i.test(readmeText || ""),
+      },
+      gitSnapshot: null,
+    });
 
     const payload = {
       ...metadata,
+      licenseDetection,
       verdict,
+      ...risk,
+      contextAdjustments: contextAdjusted.adjustments,
+      malwareExplanation,
+      trustReport,
       patternMatch: {
-        totalScore: Math.round(totalScore * 100) / 100,
+        totalScore: risk.totalRiskScore,
         matches: matches.slice(0, 100),
       },
       ai,
@@ -2247,6 +2450,7 @@ exports.malwareZipScanRepository = async (req, res) => {
       },
       totalFilesScanned: result.totalFilesScanned,
       suspiciousFiles: result.suspiciousFiles,
+      ...buildMalwareRiskMetrics(result.totalScore),
       patternMatch: {
         totalScore: Math.round(safeNumber(result.totalScore, 0) * 100) / 100,
         matches: Array.isArray(result.matches) ? result.matches.slice(0, 100) : [],
@@ -2494,6 +2698,7 @@ exports.malwareCombinedScanRepository = async (req, res) => {
         suspiciousFiles: Array.isArray(zipScan.suspiciousFiles) ? zipScan.suspiciousFiles : [],
       },
       verdict: finalVerdict,
+      ...buildMalwareRiskMetrics(combined.totalScore),
       patternMatch: {
         totalScore: Math.round(safeNumber(combined.totalScore, 0) * 100) / 100,
         matches: combined.matches.slice(0, 100),
@@ -2547,6 +2752,16 @@ exports.malwarePipelineScanRepository = async (req, res) => {
       Boolean(req.query && (req.query.debug === "1" || req.query.debug === "true")) ||
       Boolean(req.body && req.body.debug);
     const { owner, repo } = parseGithubRepoInput(url);
+
+    const cacheKey = buildMalwarePipelineCacheKey(owner, repo);
+    const cached = await redisGetJson(cacheKey);
+    if (cached && typeof cached === "object") {
+      res.set("X-RepoSmart-Cache", "HIT");
+      if (cached.input && typeof cached.input === "object") {
+        cached.input = { ...cached.input, url };
+      }
+      return res.json(cached);
+    }
 
     const alwaysLog = process.env.REPOSMART_PIPELINE_LOG === "1";
     const logPrefix = `[PIPELINE] ${owner}/${repo}`;
@@ -2794,9 +3009,54 @@ exports.malwarePipelineScanRepository = async (req, res) => {
       finalVerdict = "DANGEROUS_DATASET";
     }
 
+    const licenseDetection = await detectRepositoryLicense({
+      owner,
+      repo,
+      repoMeta: repoMeta || {},
+      treeInfo,
+      fetchFileText: fetchRepositoryFileText,
+    });
+
+    const contextAdjusted = applyContextAwareRiskAdjustments({
+      score: safeNumber(result.score, 0),
+      matches: Array.isArray(result.matches) ? result.matches : [],
+      readmeText,
+    });
+
+    if (ai && ai.parsed && typeof ai.parsed === "object") {
+      const baseConfidence = safeNumber(ai.parsed.confidence, 0.5);
+      ai.parsed.confidence = Math.round(clamp(baseConfidence + safeNumber(contextAdjusted.adjustments.confidenceAdjustment, 0), 0, 1) * 100) / 100;
+    }
+
+    const malwareExplanation = generateMalwareExplanation({
+      ...result,
+      score: contextAdjusted.adjustedScore,
+      verdict: finalVerdict,
+    });
+
+    const trustReport = generateTrustReport({
+      baseScore: null,
+      licenseDetection,
+      malwareRisk: {
+        normalizedRiskScore: Math.round(clamp((safeNumber(contextAdjusted.adjustedScore, 0) / 25) * 100, 0, 100)),
+      },
+      readmeSnapshot: {
+        present: isNonEmptyString(readmeText),
+        hasInstall: /\b(install|installation|getting started|setup)\b/i.test(readmeText || ""),
+        hasUsage: /\b(usage|how to use|examples?)\b/i.test(readmeText || ""),
+      },
+      gitSnapshot: null,
+    });
+
     const payload = {
       ...result,
       verdict: finalVerdict,
+      ...buildMalwareRiskMetrics(contextAdjusted.adjustedScore),
+      score: contextAdjusted.adjustedScore,
+      contextAdjustments: contextAdjusted.adjustments,
+      malwareExplanation,
+      licenseDetection,
+      trustReport,
       ai,
 
     };
@@ -2805,6 +3065,10 @@ exports.malwarePipelineScanRepository = async (req, res) => {
       // Remove debug-only internals by default.
       delete payload._debug;
     }
+
+    await redisSetJson(cacheKey, payload, getMalwarePipelineCacheTtlSeconds());
+
+    res.set("X-RepoSmart-Cache", "MISS");
 
     res.json(payload);
   } catch (err) {

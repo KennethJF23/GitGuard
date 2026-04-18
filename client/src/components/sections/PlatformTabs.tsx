@@ -11,6 +11,8 @@ const PlatformTabs: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0)
   const sectionRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  const autoSwitchIntervalMs = 4500
+  const totalTabs = 5
 
   useEffect(() => {
     const handleScroll = () => {
@@ -31,6 +33,14 @@ const PlatformTabs: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActiveTab((prev) => (prev + 1) % totalTabs)
+    }, autoSwitchIntervalMs)
+
+    return () => window.clearInterval(timer)
+  }, [totalTabs])
+
   const tabs = [
     {
       id: 'analyze',
@@ -39,7 +49,7 @@ const PlatformTabs: React.FC = () => {
       description: 'Parse owner/repo input and collect GitHub metadata for risk context',
       content: 'GitGuard accepts full GitHub URLs or owner/repo shorthand, validates repository identity, and gathers metadata like topics, languages, and README text before scoring.',
       videoSrc: null,
-      imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
+      imageSrc: '/images/repoanalysis.png',
       icon: Shield,
       href: '/platform'
     },
@@ -50,7 +60,7 @@ const PlatformTabs: React.FC = () => {
       description: 'Download zipballs, filter files, and match substring/regex indicators',
       content: 'The pipeline downloads repository archives, extracts source files, skips noisy paths, and scans allowed file types against MongoDB-managed malware keywords with weighted scoring.',
       videoSrc: null,
-      imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
+      imageSrc: '/images/malscan.png',
       icon: Shield,
       href: '/platform'
     },
@@ -61,7 +71,7 @@ const PlatformTabs: React.FC = () => {
       description: 'Generate deterministic outcomes from score, categories, and dataset signals',
       content: 'GitGuard classifies repositories into SAFE, SUSPICIOUS, MALICIOUS, or DANGEROUS DATASET using explicit rules, high-risk category combinations, and confidence checks.',
       videoSrc: null,
-      imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
+      imageSrc: '/images/verdict.png',
       icon: Users,
       href: '/platform'
     },
@@ -72,7 +82,7 @@ const PlatformTabs: React.FC = () => {
       description: 'Reuse previous scan results with hashed Redis keys and TTL controls',
       content: 'Analyze, AI scan, and malware scan responses are cached with configurable TTLs to reduce repeated API calls and improve response time for popular repositories.',
       videoSrc: null,
-      imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
+      imageSrc: '/images/caching.png',
       icon: GraduationCap,
       href: '/platform'
     },
@@ -83,7 +93,7 @@ const PlatformTabs: React.FC = () => {
       description: 'Protect scanner workflows with register/login and Bearer token middleware',
       content: 'GitGuard backend issues JWT tokens on login and verifies Bearer headers in middleware so only authenticated users can access protected security workflows.',
       videoSrc: null,
-      imageSrc: '/images/pawel-czerwinski-8uZPynIu-rQ-unsplash-scaled.webp',
+      imageSrc: '/images/jwt.png',
       icon: Lock,
       href: '/platform'
     }
